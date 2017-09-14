@@ -3,32 +3,40 @@ package arw
 import (
 	"io"
 	"errors"
+	"encoding/binary"
 )
 
 type metadata struct {
 	isLittleEndian bool
-	totalSize int64
-	thumbnailSize int64
-	rawSize int64
-	make string
-	manufacturer string
+	zerothOffset uint32
 }
 
-func extractMetaData(r io.Reader) (metadata,error) {
+func extractMetaData(r io.ReadSeeker) (metadata,error) {
 	var m metadata
-	tiffHeader := make([]byte,0,8)
-	r.Read(tiffHeader)
-	if len(tiffHeader) != 8 {
-		return m,errors.New("failed to read TIFF header")
+
+	var encoding [2]byte
+	if err := binary.Read(r,binary.LittleEndian,&encoding); err != nil {
+		return m,err
 	}
-	switch string(tiffHeader[:2]) {
-	case "II" :
+
+	switch encoding {
+	case [2]byte{'I','I'} :
 		m.isLittleEndian = true
-	case "MM" :
+	case [2]byte{'M','M'} :
 		m.isLittleEndian = false
 	default:
 		return m, errors.New("can't determine file endianness")
 	}
+
+	r.Seek(2,1)
+
+	var offset uint32
+	if err := binary.Read(r,binary.LittleEndian,&offset); err != nil {
+		return m,err
+	}
+	m.zerothOffset = offset
+	r.Seek(int64(offset),0)
+
 
 	return m,nil
 }
