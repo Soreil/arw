@@ -7,36 +7,52 @@ import (
 )
 
 type metadata struct {
-	isLittleEndian bool
-	zerothOffset uint32
+	TIFFHeader
+	EXIFIFD
 }
 
-func extractMetaData(r io.ReadSeeker) (metadata,error) {
-	var m metadata
+type TIFFHeader struct {
+	ByteOrder uint16
+	FortyTwo uint16
+	Offset uint32
+}
 
-	var encoding [2]byte
-	if err := binary.Read(r,binary.LittleEndian,&encoding); err != nil {
-		return m,err
-	}
+type EXIFIFD struct {
+	Count int16
+	FIA IFDFIA
+	Offset uint32
+}
 
-	switch encoding {
-	case [2]byte{'I','I'} :
-		m.isLittleEndian = true
-	case [2]byte{'M','M'} :
-		m.isLittleEndian = false
+//IFD Field Interoperability Array
+type IFDFIA struct {
+	Tag uint16
+	Type uint16
+	Count uint32
+	Offset uint32
+}
+
+func extractMetaData(r io.ReadSeeker) (m metadata,err error) {
+	var b binary.ByteOrder
+	endian := make([]byte,2)
+	r.Read(endian)
+	switch string(endian) {
+	case "II":
+		b = binary.LittleEndian
+	case "MM":
+		b = binary.BigEndian
 	default:
-		return m, errors.New("can't determine file endianness")
+		return m,errors.New("failed to determine endianness, unsupposed reader")
 	}
+	r.Seek(0,0)
 
-	r.Seek(2,1)
+	var header TIFFHeader
+	binary.Read(r,b,&header)
+	r.Seek(int64(header.Offset),0)
+	m.TIFFHeader = header
 
-	var offset uint32
-	if err := binary.Read(r,binary.LittleEndian,&offset); err != nil {
-		return m,err
-	}
-	m.zerothOffset = offset
-	r.Seek(int64(offset),0)
+	var zeroth EXIFIFD
+	binary.Read(r,b,&zeroth)
+	m.EXIFIFD = zeroth
 
-
-	return m,nil
+	return
 }
