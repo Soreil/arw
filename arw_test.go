@@ -24,5 +24,4 @@ func TestMetadata(t *testing.T) {
 	}
 
 	t.Log(meta.zeroth)
-	t.Log(meta.zeroth.FIAvals)
 }

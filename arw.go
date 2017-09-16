@@ -30,8 +30,9 @@ type EXIFIFD struct {
 func (e EXIFIFD) String() string {
 	var result []string
 	result = append( result,fmt.Sprintf("Count: %v",e.Count))
-	for _,fia := range e.FIA {
-		result = append(result,fmt.Sprintf("%+v",fia))
+	for i := range e.FIA {
+		result = append(result,fmt.Sprintf("%+v",e.FIA[i]))
+		result = append(result,fmt.Sprintf("%+v",e.FIAvals[i]))
 	}
 	result = append(result,fmt.Sprintf("Offset to next EXIFIFD: %v",e.Offset))
 	return strings.Join(result,"\n")
@@ -58,8 +59,14 @@ func (f FIAval) String() string {
 		val = fmt.Sprint(*f.long)
 	case 9:
 		val = fmt.Sprint(*f.slong)
-	case 5,10:
-		val = ""
+	case 5:
+		for _,long := range *f.longlong {
+			val += fmt.Sprintf("%v.%v, ",(long>>32)&0xffffffff,long&0xffffffff)
+		}
+	case 10:
+		for _,long := range *f.slonglong {
+			val += fmt.Sprintf("%v.%v, ",(long>>32)&0xffffffff,long&0xffffffff)
+		}
 	}
 
 	return f.IFDtype.String()+": "+val
