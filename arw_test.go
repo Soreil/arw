@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 	"fmt"
+	"bytes"
 )
 
 const testFileLocation = "samples"
@@ -23,6 +24,19 @@ func TestMetadata(t *testing.T) {
 	}
 
 	t.Log(meta)
+}
+
+func TestJPEGDecode(t *testing.T) {
+	os.Chdir(testFileLocation)
+	testARW, err := os.Open("1.ARW")
+	if err != nil {
+		t.Error(err)
+	}
+
+	meta, err := ExtractMetaData(testARW)
+	if err != nil {
+		t.Error(err)
+	}
 
 	var jpegOffset uint32
 	var jpegLength uint32
@@ -38,11 +52,42 @@ func TestMetadata(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	reader := bytes.NewReader(jpg)
+	img, err := jpeg.Decode(reader)
 
-	out,err := os.Create(fmt.Sprint(time.Now().Unix(),".jpg"))
+	out,err := os.Create(fmt.Sprint(time.Now().Unix(),"reencoded",".jpg"))
 	if err != nil {
 		t.Error(err)
 	}
 
-	jpeg.Encode(out,jpg,nil)
+	jpeg.Encode(out,img,nil)
+}
+
+func TestJPEG(t *testing.T) {
+	os.Chdir(testFileLocation)
+	testARW, err := os.Open("1.ARW")
+	if err != nil {
+		t.Error(err)
+	}
+
+	meta, err := ExtractMetaData(testARW)
+	if err != nil {
+		t.Error(err)
+	}
+
+	var jpegOffset uint32
+	var jpegLength uint32
+	for i := range meta.FIA {
+		switch meta.FIA[i].Tag {
+		case JPEGInterchangeFormat:
+			jpegOffset = meta.FIA[i].Offset
+		case JPEGInterchangeFormatLength:
+			jpegLength = meta.FIA[i].Offset
+		}
+	}
+
+	jpg := make([]byte,jpegLength)
+	testARW.ReadAt(jpg,int64(jpegOffset))
+	out,err := os.Create(fmt.Sprint(time.Now().Unix(),"raw",".jpg"))
+	out.Write(jpg)
 }

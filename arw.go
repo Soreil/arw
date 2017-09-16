@@ -8,9 +8,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"image"
-	"bytes"
-	"image/jpeg"
 )
 
 //CIPA DC-008-2012 Table 1
@@ -242,19 +239,13 @@ func ExtractMetaData(r io.ReadSeeker) (meta EXIFIFD, err error) {
 }
 
 //ExtractThumbnail extracts an embedded JPEG thumbnail.
-//The extracted image.Image has no EXIF data included.
-func ExtractThumbnail(r io.ReaderAt,offset uint32,length uint32) (image.Image, error){
+func ExtractThumbnail(r io.ReaderAt,offset uint32,length uint32) ([]byte, error) {
 	jpegData := make([]byte, length)
-	_,err := r.ReadAt(jpegData, int64(offset))
+	_, err := r.ReadAt(jpegData, int64(offset))
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
-	reader := bytes.NewReader(jpegData)
-	jpg, err := jpeg.Decode(reader)
-	if err != nil {
-		return nil,err
-	}
-	return jpg,nil
+	return jpegData,nil
 }
 
 //TODO(sjon): spec claims I should handle NULLs for ASCII
