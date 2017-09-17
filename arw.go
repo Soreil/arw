@@ -42,8 +42,7 @@ type FIAval struct {
 	short     *[]uint16
 	long      *[]uint32
 	slong     *[]int32
-	longlong  *[]uint64
-	slonglong *[]int64
+	rat       *[]float32
 }
 
 func (f FIAval) String() string {
@@ -70,15 +69,15 @@ func (f FIAval) String() string {
 		}
 		val = strings.Join(parts,", ")
 	case 5:
-		parts := make([]string,len(*f.longlong))
-		for i, long := range *f.longlong {
-			parts[i] = fmt.Sprintf("%v/%v", long&0xffffffff,(long>>32)&0xffffffff)
+		parts := make([]string,len(*f.rat))
+		for i, rat := range *f.rat {
+			parts[i] = fmt.Sprint(rat)
 		}
 		val = strings.Join(parts,", ")
 	case 10:
-		parts := make([]string,len(*f.slonglong))
-		for i, long := range *f.slonglong {
-			parts[i] = fmt.Sprintf("%v/%v", long&0xffffffff,(long>>32)&0xffffffff)
+		parts := make([]string,len(*f.rat))
+		for i, rat := range *f.rat {
+			parts[i] = fmt.Sprint(rat)
 		}
 		val = strings.Join(parts,", ")
 	}
@@ -234,6 +233,7 @@ type IFDFIA struct {
 //Anyone who thinks I'm switching byte order mid program is sorely mistaken.
 var b binary.ByteOrder
 
+//Parses a TIFF header to determine first IFD and endianness.
 func ParseHeader(r io.ReadSeeker) (TIFFHeader, error) {
 	endian := make([]byte, 2)
 	r.Read(endian)
@@ -306,15 +306,22 @@ func ExtractMetaData(r io.ReadSeeker, offset int64, whence int) (meta EXIFIFD, e
 				binary.Read(r, b, &values)
 				meta.FIAvals[n].slong = &values
 			case 5:
-				values := make([]uint64, interop.Count)
+				values := make([]uint32, interop.Count*2)
 				binary.Read(r, b, &values)
-				meta.FIAvals[n].longlong = &values
+				floats := make([]float32,interop.Count)
+				for i := range floats {
+					floats[i] = float32(values[i*2])/float32(values[(i*2)+1])
+				}
+				meta.FIAvals[n].rat = &floats
 			case 10:
-				values := make([]int64, interop.Count)
+				values := make([]int32, interop.Count*2)
 				binary.Read(r, b, &values)
-				meta.FIAvals[n].slonglong = &values
+				floats := make([]float32,interop.Count)
+				for i := range floats {
+					floats[i] = float32(values[i*2])/float32(values[(i*2)+1])
+				}
+				meta.FIAvals[n].rat = &floats
 			}
-
 		}
 	}
 
