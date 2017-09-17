@@ -18,12 +18,68 @@ func TestMetadata(t *testing.T) {
 		t.Error(err)
 	}
 
-	meta, err := ExtractMetaData(testARW)
+	header,err := ParseHeader(testARW)
+	meta, err := ExtractMetaData(testARW,int64(header.Offset),0)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log("0th IFD for primary image data")
+	t.Log(meta)
+
+	for _,v := range meta.FIA {
+		t.Logf("%+v\n",v)
+	}
+
+	for _,fia := range meta.FIA {
+		if fia.Tag == SubIFDs {
+			next,err := ExtractMetaData(testARW,int64(fia.Offset),0)
+			if err != nil {
+				t.Error(err)
+			}
+			t.Log("A subIFD, who knows what we'll find here!")
+			t.Log(next)
+		}
+
+		if fia.Tag == GPSTag {
+			gps, err := ExtractMetaData(testARW,int64(fia.Offset),0)
+			if err != nil {
+				t.Error(err)
+			}
+
+			t.Log("GPS IFD (GPS Info Tag)")
+			t.Log(gps)
+		}
+
+		if fia.Tag == ExifTag {
+			exif, err := ExtractMetaData(testARW,int64(fia.Offset),0)
+			if err != nil {
+				t.Error(err)
+			}
+
+			t.Log("Exif IFD (Exif Private Tag)")
+			t.Log(exif)
+			////Just an attempt at understanding these crazy MakerNotes..
+			//for i := range exif.FIA {
+			//	if exif.FIA[i].Tag == MakerNote {
+			//		makernote,err := ExtractMetaData(bytes.NewReader(*exif.FIAvals[i].ascii),0,0)
+			//		if err != nil {
+			//			t.Error(err)
+			//		}
+			//
+			//		t.Log("Really stupid propietary makernote structure.")
+			//		t.Log(makernote)
+			//	}
+			//}
+		}
+	}
+
+	first, err := ExtractMetaData(testARW,int64(meta.Offset),0)
 	if err != nil {
 		t.Error(err)
 	}
 
-	t.Log(meta)
+	t.Log("First IFD for thumbnail data")
+	t.Log(first)
 }
 
 func TestJPEGDecode(t *testing.T) {
@@ -32,8 +88,8 @@ func TestJPEGDecode(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	meta, err := ExtractMetaData(testARW)
+	header,err := ParseHeader(testARW)
+	meta, err := ExtractMetaData(testARW,int64(header.Offset),0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -70,7 +126,8 @@ func TestJPEG(t *testing.T) {
 		t.Error(err)
 	}
 
-	meta, err := ExtractMetaData(testARW)
+	header,err := ParseHeader(testARW)
+	meta, err := ExtractMetaData(testARW,int64(header.Offset),0)
 	if err != nil {
 		t.Error(err)
 	}
