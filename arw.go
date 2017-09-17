@@ -72,13 +72,13 @@ func (f FIAval) String() string {
 	case 5:
 		parts := make([]string,len(*f.longlong))
 		for i, long := range *f.longlong {
-			parts[i] = fmt.Sprintf("%v.%v", (long>>32)&0xffffffff, long&0xffffffff)
+			parts[i] = fmt.Sprintf("%v/%v", long&0xffffffff,(long>>32)&0xffffffff)
 		}
 		val = strings.Join(parts,", ")
 	case 10:
 		parts := make([]string,len(*f.slonglong))
 		for i, long := range *f.slonglong {
-			parts[i] = fmt.Sprintf("%v.%v", (long>>32)&0xffffffff, long&0xffffffff)
+			parts[i] = fmt.Sprintf("%v/%v", long&0xffffffff,(long>>32)&0xffffffff)
 		}
 		val = strings.Join(parts,", ")
 	}
