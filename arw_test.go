@@ -23,32 +23,33 @@ func TestMetadata(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	t.Log("0th IFD for primary image data")
-	t.Log(meta)
-
-	for _,v := range meta.FIA {
-		t.Logf("%+v\n",v)
-	}
+	//t.Log("0th IFD for primary image data")
+	//t.Log(meta)
+	//
+	//for _,v := range meta.FIA {
+	//	t.Logf("%+v\n",v)
+	//}
 
 	for _,fia := range meta.FIA {
-		if fia.Tag == SubIFDs {
-			next,err := ExtractMetaData(testARW,int64(fia.Offset),0)
-			if err != nil {
-				t.Error(err)
-			}
-			t.Log("A subIFD, who knows what we'll find here!")
-			t.Log(next)
-		}
-
-		if fia.Tag == GPSTag {
-			gps, err := ExtractMetaData(testARW,int64(fia.Offset),0)
-			if err != nil {
-				t.Error(err)
-			}
-
-			t.Log("GPS IFD (GPS Info Tag)")
-			t.Log(gps)
-		}
+		//if fia.Tag == SubIFDs {
+		//	t.Log("Reading subIFD located at: ",fia.Offset)
+		//	next,err := ExtractMetaData(testARW,int64(fia.Offset),0)
+		//	if err != nil {
+		//		t.Error(err)
+		//	}
+		//	t.Log("A subIFD, who knows what we'll find here!")
+		//	t.Log(next)
+		//}
+		//
+		//if fia.Tag == GPSTag {
+		//	gps, err := ExtractMetaData(testARW,int64(fia.Offset),0)
+		//	if err != nil {
+		//		t.Error(err)
+		//	}
+		//
+		//	t.Log("GPS IFD (GPS Info Tag)")
+		//	t.Log(gps)
+		//}
 
 		if fia.Tag == ExifTag {
 			exif, err := ExtractMetaData(testARW,int64(fia.Offset),0)
@@ -56,20 +57,23 @@ func TestMetadata(t *testing.T) {
 				t.Error(err)
 			}
 
-			t.Log("Exif IFD (Exif Private Tag)")
-			t.Log(exif)
-			////Just an attempt at understanding these crazy MakerNotes..
-			//for i := range exif.FIA {
-			//	if exif.FIA[i].Tag == MakerNote {
-			//		makernote,err := ExtractMetaData(bytes.NewReader(*exif.FIAvals[i].ascii),0,0)
-			//		if err != nil {
-			//			t.Error(err)
-			//		}
-			//
-			//		t.Log("Really stupid propietary makernote structure.")
-			//		t.Log(makernote)
-			//	}
-			//}
+			//t.Log("Exif IFD (Exif Private Tag)")
+			//t.Log(exif)
+			//Just an attempt at understanding these crazy MakerNotes..
+			for i := range exif.FIA {
+				if exif.FIA[i].Tag == MakerNote {
+					makernote,err := ExtractMetaData(bytes.NewReader(*exif.FIAvals[i].ascii),0,0)
+					if err != nil {
+						t.Error(err)
+					}
+
+					t.Log("Really stupid propietary makernote structure.")
+					t.Log(makernote)
+					for _,v := range makernote.FIA {
+						t.Logf("%+v\n",v)
+					}
+				}
+			}
 		}
 	}
 
@@ -80,6 +84,37 @@ func TestMetadata(t *testing.T) {
 
 	t.Log("First IFD for thumbnail data")
 	t.Log(first)
+}
+
+func TestNestedHeader(t *testing.T) {
+	os.Chdir(testFileLocation)
+	testARW, err := os.Open("1.ARW")
+	if err != nil {
+		t.Error(err)
+	}
+
+	//Found another II marker in the file
+	testARW.Seek(2472, 0)
+	header, err := ParseHeader(testARW)
+	meta, err := ExtractMetaData(testARW, int64(header.Offset), 0)
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(meta)
+}
+
+func TestArwPoke(t *testing.T) {
+	os.Chdir(testFileLocation)
+	testARW, err := os.Open("1.ARW")
+	if err != nil {
+		t.Error(err)
+	}
+	const rawstart = 872960
+	const rawend = 25210111
+	raw := make([]byte,rawend-rawstart)
+	testARW.ReadAt(raw,rawstart)
+	f,_ := os.Create("rawoutput.arw")
+	f.Write(raw)
 }
 
 func TestJPEGDecode(t *testing.T) {
@@ -143,6 +178,7 @@ func TestJPEG(t *testing.T) {
 		}
 	}
 
+	t.Log("JPEG start:",jpegOffset," JPEG size:",jpegLength)
 	jpg := make([]byte,jpegLength)
 	testARW.ReadAt(jpg,int64(jpegOffset))
 	out,err := os.Create(fmt.Sprint(time.Now().Unix(),"raw",".jpg"))

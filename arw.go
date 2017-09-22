@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 )
 
@@ -35,6 +34,15 @@ func (e EXIFIFD) String() string {
 	return strings.Join(result, "\n")
 }
 
+//IFD Field Interoperability Array
+//CIPA DC-008-2012 Chapter 4.6.2
+type IFDFIA struct {
+	Tag    IFDtag
+	Type   IFDtype
+	Count  uint32
+	Offset uint32
+}
+
 //CIPA DC-008-2012 Chapter 4.6.2
 type FIAval struct {
 	IFDtype
@@ -45,10 +53,64 @@ type FIAval struct {
 	rat       *[]float32
 }
 
+type ShotInfoTags struct {
+	_ [2]byte
+	FaceInfoOffset uint16
+	SonyDateTime [20]byte
+	SonyImageHeight uint16
+	SonyImageWidth uint16
+	FacesDetected uint16
+	FaceInfoLength uint16
+	MetaVersion [16]byte
+	_ [4]byte
+	FaceInfo1
+	FaceInfo2
+}
+
+type FaceInfo1 struct {
+	Face1Position [4]uint16
+	_ [24]byte
+	Face2Position [4]uint16
+	_ [24]byte
+	Face3Position [4]uint16
+	_ [24]byte
+	Face4Position [4]uint16
+	_ [24]byte
+	Face5Position [4]uint16
+	_ [24]byte
+	Face6Position [4]uint16
+	_ [24]byte
+	Face7Position [4]uint16
+	_ [24]byte
+	Face8Position [4]uint16
+	_ [24]byte
+}
+
+type FaceInfo2 struct {
+	Face1Position [4]uint16
+	_ [29]byte
+	Face2Position [4]uint16
+	_ [29]byte
+	Face3Position [4]uint16
+	_ [29]byte
+	Face4Position [4]uint16
+	_ [29]byte
+	Face5Position [4]uint16
+	_ [29]byte
+	Face6Position [4]uint16
+	_ [29]byte
+	Face7Position [4]uint16
+	_ [29]byte
+	Face8Position [4]uint16
+	_ [29]byte
+}
+
 func (f FIAval) String() string {
 	var val string
 	switch f.IFDtype {
-	case 1, 2, 7:
+	case 1,7:
+		val = fmt.Sprint(*f.ascii)
+	case 2:
 		val = fmt.Sprint(string(*f.ascii))
 	case 3:
 		parts := make([]string,len(*f.short))
@@ -91,13 +153,22 @@ type IFDtag uint16
 //IFDtags mapping taken from http://www.exiv2.org/tags.html
 const (
 	NewSubFileType   IFDtag = 254
+	ImageWidth IFDtag = 256
+	ImageHeight IFDtag = 257
+	BitsPerSample IFDtag = 258
 	Compression      IFDtag = 259
+	PhotometricInterpretation IFDtag = 262
 	ImageDescription IFDtag = 270
 	Make             IFDtag = 271
 	Model            IFDtag = 272
+	StripOffsets     IFDtag = 273
 	Orientation      IFDtag = 274
+	SamplesPerPixel IFDtag = 277
+	RowsPerStrip IFDtag = 278
+	StripByteCounts  IFDtag = 279
 	XResolution      IFDtag = 282
 	YResolution      IFDtag = 283
+	PlanarConfiguration IFDtag = 284
 	ResolutionUnit   IFDtag = 296
 	Software         IFDtag = 305
 	DateTime         IFDtag = 306
@@ -106,6 +177,15 @@ const (
 	JPEGInterchangeFormat       IFDtag = 513
 	JPEGInterchangeFormatLength IFDtag = 514
 	YCbCrPositioning            IFDtag = 531
+
+	ShotInfo IFDtag = 0x3000
+	FileFormat IFDtag = 0xb000
+	SonyModelID IFDtag =  0xb001
+	CreativeStyle IFDtag = 0xb020
+	LensSpec IFDtag = 0xb02a
+	FullImageSize IFDtag = 0xb02b
+	PreviewImageSize IFDtag = 0xb02c
+	Tag9400 IFDtag = 0x9400 //Tag9400A-C
 
 	ExifTag             IFDtag = 34665
 	GPSTag              IFDtag = 34853
@@ -171,67 +251,52 @@ const (
 	DeviceSettingDescription IFDtag = 41995
 	SubjectDistanceRange     IFDtag = 41996
 	ImageUniqueID            IFDtag = 42016
-	LensSpecification IFDtag = 42034
-	LensModel IFDtag = 42036
+	LensSpecification        IFDtag = 42034
+	LensModel                IFDtag = 42036
+
+	SonyRawFileType IFDtag = 0x7000
+
+	CFARepeatPatternDim      IFDtag = 0x828d
+	CFAPattern2              IFDtag = 0x828e
 
 )
 
 //IFD datatype, most datatypes translate in to C datatypes.
+//go:generate stringer -type=IFDtype
 type IFDtype uint16
+
+const (
+	UNKNOWNTYPE IFDtype = iota
+	BYTE
+	ASCII
+	SHORT
+	LONG
+	RATIONAL
+	_
+	UNDEFINED
+	SSHORT
+	SLONG
+	SRRATIONAL
+)
 
 //IFDType length in bytes
 func (i IFDtype) Len() int {
 	switch i {
-	case 1, 2, 7:
+	case BYTE, ASCII, UNDEFINED:
 		return 1
-	case 3:
+	case SHORT, SSHORT:
 		return 2
-	case 4, 9:
+	case LONG, SLONG:
 		return 4
-	case 5, 10:
+	case RATIONAL, SRRATIONAL:
 		return 8
 	default:
 		return -1
-		//panic("Unknown IFDtype")
 	}
-}
-
-func (i IFDtype) String() string {
-	var r string
-	switch i {
-	case 1:
-		r = "BYTE"
-	case 2:
-		r = "ASCII"
-	case 3:
-		r = "SHORT"
-	case 4:
-		r = "LONG"
-	case 5:
-		r = "RATIONAL"
-	case 7:
-		r = "UNDEFINED"
-	case 9:
-		r = "SLONG"
-	case 10:
-		r = "SRATIONAL"
-	default:
-		panic("Unknown IFDtype: " + strconv.Itoa(int(i)))
-	}
-	return r
-}
-
-//IFD Field Interoperability Array
-//CIPA DC-008-2012 Chapter 4.6.2
-type IFDFIA struct {
-	Tag    IFDtag
-	Type   IFDtype
-	Count  uint32
-	Offset uint32
 }
 
 //Anyone who thinks I'm switching byte order mid program is sorely mistaken.
-var b binary.ByteOrder
+var b binary.ByteOrder = binary.LittleEndian
 
 //Parses a TIFF header to determine first IFD and endianness.
 func ParseHeader(r io.ReadSeeker) (TIFFHeader, error) {
