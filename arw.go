@@ -3,10 +3,10 @@ package arw
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"errors"
 )
 
 //CIPA DC-008-2012 Table 1
@@ -187,6 +187,14 @@ const (
 	PreviewImageSize IFDtag = 0xb02c
 	Tag9400 IFDtag = 0x9400 //Tag9400A-C
 
+	//Following tags have been scavenged from the internet, most likely to do with the Sony raw data in ARW
+	SR2SubIFDOffset IFDtag = 0x7200
+	SR2SubIFDLength IFDtag = 0x7201
+	SR2SubIFDKey IFDtag = 0x7221
+	IDC_IFD IFDtag = 0x7240
+	IDC2_IFD IFDtag = 0x7241
+	MRWInfo IFDtag = 0x7250
+
 	ExifTag             IFDtag = 34665
 	GPSTag              IFDtag = 34853
 	InteroperabilityTag IFDtag = 40965
@@ -308,12 +316,15 @@ func ParseHeader(r io.ReadSeeker) (TIFFHeader, error) {
 	case "MM":
 		b = binary.BigEndian
 	default:
-		return TIFFHeader{}, errors.New("failed to determine endianness")
+		return TIFFHeader{}, errors.New("failed to determine endianness: "+fmt.Sprint(endian))
 	}
-	r.Seek(0, 0)
+	r.Seek(-2, 1)
 
 	var header TIFFHeader
 	binary.Read(r, b, &header)
+	if header.FortyTwo != 42 {
+		return header,errors.New("found an endianness marker but no fixed 42, offset might be unrealiable")
+	}
 	return header, nil
 }
 
@@ -391,6 +402,13 @@ func ExtractMetaData(r io.ReadSeeker, offset int64, whence int) (meta EXIFIFD, e
 	}
 
 	return
+}
+
+func DecryptSR2(r io.ReaderAt, offset uint32, length uint32,key uint32) ([]byte, error){
+
+	
+
+	return nil,nil
 }
 
 //ExtractThumbnail extracts an embedded JPEG thumbnail.
