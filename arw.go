@@ -28,7 +28,27 @@ func (e EXIFIFD) String() string {
 	var result []string
 	result = append(result, fmt.Sprintf("Count: %v", e.Count))
 	for i := range e.FIA {
-		result = append(result, fmt.Sprintf("%v: %v", e.FIA[i].Tag, e.FIAvals[i]))
+		var val string
+		val = e.FIAvals[i].String()
+		if int(e.FIA[i].Count)*e.FIA[i].Type.Len() <= 4 {
+			switch e.FIA[i].Type {
+			case BYTE:
+				val = fmt.Sprintf("%x %x %x %x",(e.FIA[i].Offset>>24)&0xff,(e.FIA[i].Offset>>16)&0xff,(e.FIA[i].Offset>>8)&0xff,(e.FIA[i].Offset>>0)&0xff)
+			case ASCII:
+				val = fmt.Sprintf("%c %c %c %c",(e.FIA[i].Offset>>24)&0xff,(e.FIA[i].Offset>>16)&0xff,(e.FIA[i].Offset>>8)&0xff,(e.FIA[i].Offset>>0)&0xff)
+			case SHORT:
+				val = fmt.Sprintf("%v %v",(e.FIA[i].Offset>>16)&0xffff,(e.FIA[i].Offset>>0)&0xffff)
+			case LONG:
+				val = fmt.Sprint(e.FIA[i].Offset)
+			case UNDEFINED:
+				val = fmt.Sprintf("%x %x %x %x",(e.FIA[i].Offset>>24)&0xff,(e.FIA[i].Offset>>16)&0xff,(e.FIA[i].Offset>>8)&0xff,(e.FIA[i].Offset>>0)&0xff)
+			case SSHORT:
+				val = fmt.Sprintf("%v %v",int16((e.FIA[i].Offset>>16)&0xffff),int16((e.FIA[i].Offset>>0)&0xffff))
+			case SLONG:
+				val = fmt.Sprint(int32(e.FIA[i].Offset))
+			}
+		}
+		result = append(result, fmt.Sprintf("%v: %v", e.FIA[i].Tag, val))
 	}
 	result = append(result, fmt.Sprintf("Offset to next EXIFIFD: %v", e.Offset))
 	return strings.Join(result, "\n")
@@ -404,11 +424,28 @@ func ExtractMetaData(r io.ReadSeeker, offset int64, whence int) (meta EXIFIFD, e
 	return
 }
 
-func DecryptSR2(r io.ReaderAt, offset uint32, length uint32,key uint32) ([]byte, error){
+func DecryptSR2(r io.ReaderAt, offset uint32, length uint32,key [4]byte) ([]byte, error){
+	buf := make([]byte,length)
+	r.ReadAt(buf,int64(offset))
 
-	
+	var pad [128]byte
 
-	return nil,nil
+	for i := 0; i < 4; i++ {
+		pad[i]=key[i]
+	}
+	pad[3] = pad[3] << 1 | (pad[0]^pad[2]) >> 31
+
+	for i:=4; i < 127; i++ {
+		pad[i] = (pad[i-4]^pad[i-2]) << 1 | (pad[i-3]^pad[i-1]) >> 31
+	}
+
+	for i := 127;i < int(length)+127; i++ {
+		or :=  pad[(i+1) & 127] ^ pad[(i+65) & 127]
+		pad[i & 127] = or
+		buf[i-127] ^= byte(or)
+	}
+
+	return buf,nil
 }
 
 //ExtractThumbnail extracts an embedded JPEG thumbnail.
