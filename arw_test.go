@@ -28,7 +28,7 @@ func TestDecodeF828(t *testing.T) {
 	const width = 6048
 	const height = 4024
 	const rowsperstrip = height
-	const stripbytecount = 24337152
+	const stripbytecount = 0x1735B00
 	buf := make([]byte,stripbytecount)
 	_,err = testARW.ReadAt(buf,offset)
 	if err != nil {
@@ -38,6 +38,9 @@ func TestDecodeF828(t *testing.T) {
 	img := image.NewNRGBA64(image.Rect(0,0,width,height))
 
 	t.Log(readEvenGB(buf[0:width]))
+	for i,b := range buf[0:16] {
+		t.Logf("%d: %d %x %b ",i,b,b,b)
+	}
 
 	os.Chdir("experiments")
 	time := fmt.Sprint(time.Now().Unix())
@@ -66,36 +69,45 @@ func readEvenGB(row []byte) string{
 
 	var high, low uint64
 
-	binary.Read(buf,binary.LittleEndian,&high)
-	binary.Read(buf,binary.LittleEndian,&low)
+	binary.Read(buf,binary.BigEndian,&high)
+	binary.Read(buf,binary.BigEndian,&low)
+	var current uint64 = high
 
 	var offset uint64 = 0
 
 	var size uint64 = 11
-	max = uint16(readbits(high,offset,size)) //11
+	max = uint16(readbits(current,offset,size)) //11
 	offset += size
 
-	min = uint16(readbits(high,offset,size)) //22
+	min = uint16(readbits(current,offset,size)) //22
 	offset += size
 
 	size = 4
-	maxOffset = uint8(readbits(high,offset,size)) //26
+	maxOffset = uint8(readbits(current,offset,size)) //26
 	offset += size
 
-	minOffset = uint8(readbits(high,offset,size)) //30
+	minOffset = uint8(readbits(current,offset,size)) //30
 	offset += size
 
 	size = 7
 	for i := range deltas {
-		deltas[i] = uint8(readbits(high,offset,size))
+		if (offset+size) % 64 <size {
+			deltas[i] = uint8(readbits(current,offset,64-offset))<<uint8(size-(64-offset))
+			current = low
+			deltas[i] += uint8(readbits(current,offset,(offset+size) % 64))
+			offset+=size
+			offset %=64
+			continue
+		}
+		deltas[i] = uint8(readbits(current,offset,size))
 		offset += size
 	}
 
 	var ret string
-	ret += fmt.Sprintf("High and low:\n%064b\n%064b\n",high,low)
-	ret += fmt.Sprintf("Colours interpreted as bits:\n%064b\n%064b\n%064b\n%064b\n", max, min, maxOffset, minOffset)
+	ret += fmt.Sprintf("High and low:\n% 64b\n% 64b\n", high,low)
+	ret += fmt.Sprintf("Colours interpreted as bits:\n% 64b\n% 64b\n% 64b\n% 64b\n", max, min, maxOffset, minOffset)
 	for _, delta := range deltas {
-		ret += fmt.Sprintf("%064b\n", delta)
+		ret += fmt.Sprintf("% 64b\n", delta)
 	}
 	ret+= fmt.Sprintf("Final offset in bits: %v\n",offset)
 	return ret
