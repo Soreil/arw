@@ -9,13 +9,13 @@ import (
 	"bytes"
 	"io/ioutil"
 	"image"
-	"encoding/binary"
 	"image/png"
+	"log"
 )
 
 const testFileLocation = "samples"
 
-func TestDecodeF828(t *testing.T) {
+func TestDecodeBayer(t *testing.T) {
 	os.Chdir(testFileLocation)
 	testARW, err := os.Open("1.ARW.clear")
 	if err != nil {
@@ -39,7 +39,7 @@ func TestDecodeF828(t *testing.T) {
 
 	t.Log(readEvenGB(buf[0:width]))
 	for i,b := range buf[0:16] {
-		t.Logf("%d: %d %x %b ",i,b,b,b)
+		t.Logf("%d: %d %x\t%08b ",i,b,b,b)
 	}
 
 	os.Chdir("experiments")
@@ -56,58 +56,77 @@ func TestDecodeF828(t *testing.T) {
 	}
 }
 
-func readbits(n uint64,offset uint64, size uint64) uint64 {
-	return (n&((1<<(offset+size)) - (1 << offset))) >> offset
+func readbits(n byte, offset uint, size uint) uint {
+	return (uint(n) << (offset % 8)) & (((1 << size) - 1) << (8 - size))
 }
 
-func readEvenGB(row []byte) string{
-	buf := bytes.NewReader(row)
+func read(row []byte, offset uint, size uint) uint {
+	var result uint
 
+	for cur := offset/8; size > 0; cur++ {
+		if offset == 121  {
+			log.Printf("Our poor lost byte: %08b\n",row[cur])
+		}
+
+		inbyteoffset := uint(8 - (offset % 8))
+		log.Println(inbyteoffset)
+		if inbyteoffset >= size {
+			//we can just read the value from current byte
+			region := readbits(row[cur], inbyteoffset, size)
+			log.Printf("%011b, %v, %v inbyteoffset >= size\n", region, size, inbyteoffset)
+			result += region >> (8 - size)
+			size -= size
+		} else {
+			//we will need to read from multiple bytes
+			region := readbits(row[cur], 8 - inbyteoffset, inbyteoffset)
+			log.Printf("%011b, %v, %v else\n", region, size, inbyteoffset)
+			//read inbyteoffset bites
+			//subtract from size
+			size -= inbyteoffset
+			if shift := int(size - (8 - inbyteoffset)); shift >= 0 {
+				result += (region << uint(shift))
+			} else {
+				result += (region >> uint(-shift))
+			}
+			//check again if size fits in new inbyteoffset
+			offset += inbyteoffset
+		}
+		log.Printf("cursor: %d size: %d offset: %d result: %011b\n", cur, size, offset, result)
+	}
+
+	return result
+}
+
+
+func readEvenGB(row []byte) string{
 	var max,min uint16
 	var maxOffset, minOffset uint8
 	var deltas [14]uint8
 
-	var high, low uint64
+	var offset uint = 0
 
-	binary.Read(buf,binary.BigEndian,&high)
-	binary.Read(buf,binary.BigEndian,&low)
-	var current uint64 = high
-
-	var offset uint64 = 0
-
-	var size uint64 = 11
-	max = uint16(readbits(current,offset,size)) //11
-	offset += size
-
-	min = uint16(readbits(current,offset,size)) //22
-	offset += size
+	var size uint = 11
+	max = uint16(read(row,offset,size)) //11
+	offset+=size
+	min = uint16(read(row,offset,size)) //22
+	offset+=size
 
 	size = 4
-	maxOffset = uint8(readbits(current,offset,size)) //26
+	maxOffset = uint8(read(row,offset,size)) //26
 	offset += size
-
-	minOffset = uint8(readbits(current,offset,size)) //30
+	minOffset = uint8(read(row,offset,size)) //30
 	offset += size
 
 	size = 7
 	for i := range deltas {
-		if (offset+size) % 64 <size {
-			deltas[i] = uint8(readbits(current,offset,64-offset))<<uint8(size-(64-offset))
-			current = low
-			deltas[i] += uint8(readbits(current,offset,(offset+size) % 64))
-			offset+=size
-			offset %=64
-			continue
-		}
-		deltas[i] = uint8(readbits(current,offset,size))
+		deltas[i] = uint8(read(row,offset,size))
 		offset += size
 	}
 
 	var ret string
-	ret += fmt.Sprintf("High and low:\n% 64b\n% 64b\n", high,low)
-	ret += fmt.Sprintf("Colours interpreted as bits:\n% 64b\n% 64b\n% 64b\n% 64b\n", max, min, maxOffset, minOffset)
+	ret += fmt.Sprintf("Colours interpreted as bits:\n%011b\n%011b\n%04b\n%04b\n", max, min, maxOffset, minOffset)
 	for _, delta := range deltas {
-		ret += fmt.Sprintf("% 64b\n", delta)
+		ret += fmt.Sprintf("%07b\n", delta)
 	}
 	ret+= fmt.Sprintf("Final offset in bits: %v\n",offset)
 	return ret
