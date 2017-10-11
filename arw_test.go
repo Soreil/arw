@@ -8,15 +8,13 @@ import (
 	"fmt"
 	"bytes"
 	"io/ioutil"
-	"image"
-	"image/png"
 )
 
 const testFileLocation = "samples"
 
 func TestDecodeBayer(t *testing.T) {
 	os.Chdir(testFileLocation)
-	testARW, err := os.Open("1.ARW.clear")
+	testARW, err := os.Open("1.ARW")
 	if err != nil {
 		t.Error(err)
 	}
@@ -34,22 +32,24 @@ func TestDecodeBayer(t *testing.T) {
 		panic(err)
 	}
 
-	img := image.NewNRGBA64(image.Rect(0,0,width,height))
 
 	t.Log(readblock(buf[0:width]))
+	t.Log(readblock(buf[0:width]).Decompress())
 
-	os.Chdir("experiments")
-	time := fmt.Sprint(time.Now().Unix())
-	fjpg,_ := os.Create("F828"+time+".jpg")
-	fpng,_ := os.Create("F828"+time+".png")
-	err = jpeg.Encode(fjpg,img,&jpeg.Options{100})
-	if err != nil {
-		panic(err)
-	}
-	err = png.Encode(fpng,img)
-	if err != nil {
-		panic(err)
-	}
+	//img := image.NewNRGBA64(image.Rect(0,0,width,height))
+	//
+	//os.Chdir("experiments")
+	//time := fmt.Sprint(time.Now().Unix())
+	//fjpg,_ := os.Create("F828"+time+".jpg")
+	//fpng,_ := os.Create("F828"+time+".png")
+	//err = jpeg.Encode(fjpg,img,&jpeg.Options{100})
+	//if err != nil {
+	//	panic(err)
+	//}
+	//err = png.Encode(fpng,img)
+	//if err != nil {
+	//	panic(err)
+	//}
 }
 
 func TestF828(t *testing.T) {
@@ -319,12 +319,14 @@ func TestJPEGDecode(t *testing.T) {
 	}
 	reader := bytes.NewReader(jpg)
 	img, err := jpeg.Decode(reader)
+	if err != nil {
+		t.Error(err)
+	}
 
 	out,err := os.Create(fmt.Sprint(time.Now().Unix(),"reencoded",".jpg"))
 	if err != nil {
 		t.Error(err)
 	}
-
 	jpeg.Encode(out,img,nil)
 }
 

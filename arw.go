@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"errors"
+	"math"
+	"log"
 )
 
 //CIPA DC-008-2012 Table 1
@@ -208,9 +210,13 @@ const (
 	Tag9400 IFDtag = 0x9400 //Tag9400A-C
 
 	//Following tags have been scavenged from the internet, most likely to do with the Sony raw data in ARW
+	SonyRawFileType IFDtag = 0x7000
+	SonyCurve IFDtag = 0x7010
+
 	SR2SubIFDOffset IFDtag = 0x7200
 	SR2SubIFDLength IFDtag = 0x7201
 	SR2SubIFDKey IFDtag = 0x7221
+
 	IDC_IFD IFDtag = 0x7240
 	IDC2_IFD IFDtag = 0x7241
 	MRWInfo IFDtag = 0x7250
@@ -281,8 +287,6 @@ const (
 	ImageUniqueID            IFDtag = 42016
 	LensSpecification        IFDtag = 42034
 	LensModel                IFDtag = 42036
-
-	SonyRawFileType IFDtag = 0x7000
 
 	CFARepeatPatternDim      IFDtag = 0x828d
 	CFAPattern2              IFDtag = 0x828e
@@ -466,8 +470,31 @@ type pixelblock struct {
 	pix    [14]uint8
 }
 
+const pixelblocksize = 16
+
+type pixel uint16
+
 func (p pixelblock) String() string {
 	return fmt.Sprintf("%011b\n%011b\n%04b\n%04b\n%08b", p.max, p.min, p.maxidx, p.minidx, p.pix)
+}
+
+func (p pixelblock) Decompress() [pixelblocksize]pixel {
+	var pix [pixelblocksize]pixel
+	factor := uint8(1 << uint8(math.Ceil(math.Log2(float64(p.max-p.min)/128))))
+	var ordinary int
+	for i := 0; i < pixelblocksize; i++ {
+		switch i {
+		case int(p.maxidx):
+			pix[i] = pixel(p.max)
+		case int(p.minidx):
+			pix[i] = pixel(p.min)
+		default:
+			log.Println(p.min,p.max,p.max-p.min,factor)
+			pix[i]=pixel(p.min) + pixel(p.pix[ordinary]*factor)
+			ordinary++
+			}
+	}
+	return pix
 }
 
 func readblock(s []byte) pixelblock {
