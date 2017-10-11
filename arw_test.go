@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"image"
 	"image/png"
-	"log"
 )
 
 const testFileLocation = "samples"
@@ -37,10 +36,7 @@ func TestDecodeBayer(t *testing.T) {
 
 	img := image.NewNRGBA64(image.Rect(0,0,width,height))
 
-	t.Log(readEvenGB(buf[0:width]))
-	for i,b := range buf[0:16] {
-		t.Logf("%d: %d %x\t%08b ",i,b,b,b)
-	}
+	t.Log(readblock(buf[0:width]))
 
 	os.Chdir("experiments")
 	time := fmt.Sprint(time.Now().Unix())
@@ -54,82 +50,6 @@ func TestDecodeBayer(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func readbits(n byte, offset uint, size uint) uint {
-	return (uint(n) << (offset % 8)) & (((1 << size) - 1) << (8 - size))
-}
-
-func read(row []byte, offset uint, size uint) uint {
-	var result uint
-
-	for cur := offset/8; size > 0; cur++ {
-		if offset == 121  {
-			log.Printf("Our poor lost byte: %08b\n",row[cur])
-		}
-
-		inbyteoffset := uint(8 - (offset % 8))
-		log.Println(inbyteoffset)
-		if inbyteoffset >= size {
-			//we can just read the value from current byte
-			region := readbits(row[cur], inbyteoffset, size)
-			log.Printf("%011b, %v, %v inbyteoffset >= size\n", region, size, inbyteoffset)
-			result += region >> (8 - size)
-			size -= size
-		} else {
-			//we will need to read from multiple bytes
-			region := readbits(row[cur], 8 - inbyteoffset, inbyteoffset)
-			log.Printf("%011b, %v, %v else\n", region, size, inbyteoffset)
-			//read inbyteoffset bites
-			//subtract from size
-			size -= inbyteoffset
-			if shift := int(size - (8 - inbyteoffset)); shift >= 0 {
-				result += (region << uint(shift))
-			} else {
-				result += (region >> uint(-shift))
-			}
-			//check again if size fits in new inbyteoffset
-			offset += inbyteoffset
-		}
-		log.Printf("cursor: %d size: %d offset: %d result: %011b\n", cur, size, offset, result)
-	}
-
-	return result
-}
-
-
-func readEvenGB(row []byte) string{
-	var max,min uint16
-	var maxOffset, minOffset uint8
-	var deltas [14]uint8
-
-	var offset uint = 0
-
-	var size uint = 11
-	max = uint16(read(row,offset,size)) //11
-	offset+=size
-	min = uint16(read(row,offset,size)) //22
-	offset+=size
-
-	size = 4
-	maxOffset = uint8(read(row,offset,size)) //26
-	offset += size
-	minOffset = uint8(read(row,offset,size)) //30
-	offset += size
-
-	size = 7
-	for i := range deltas {
-		deltas[i] = uint8(read(row,offset,size))
-		offset += size
-	}
-
-	var ret string
-	ret += fmt.Sprintf("Colours interpreted as bits:\n%011b\n%011b\n%04b\n%04b\n", max, min, maxOffset, minOffset)
-	for _, delta := range deltas {
-		ret += fmt.Sprintf("%07b\n", delta)
-	}
-	ret+= fmt.Sprintf("Final offset in bits: %v\n",offset)
-	return ret
 }
 
 func TestF828(t *testing.T) {

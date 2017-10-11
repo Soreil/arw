@@ -458,6 +458,45 @@ func ExtractThumbnail(r io.ReaderAt, offset uint32, length uint32) ([]byte, erro
 	return jpegData, nil
 }
 
+type pixelblock struct {
+	max    uint16
+	min    uint16
+	maxidx uint8
+	minidx uint8
+	pix    [14]uint8
+}
+
+func (p pixelblock) String() string {
+	return fmt.Sprintf("%011b\n%011b\n%04b\n%04b\n%08b", p.max, p.min, p.maxidx, p.minidx, p.pix)
+}
+
+func readblock(s []byte) pixelblock {
+	var p pixelblock
+
+	p.max = ((uint16(s[0]) & 0xff) << 3) + (uint16(s[1])&0xe0)>>5
+	p.min = ((uint16(s[1]) & 0x1f) << 6) + (uint16(s[2])&0xfc)>>2
+
+	p.maxidx = ((s[2] & 0x03) << 2) + (s[3]&0xc0)>>6
+	p.minidx = (s[3] & 0x3c) >> 2
+
+	p.pix[0] = ((s[3] & 0x03) << 5) + ((s[4] & 0xf8) >> 3)
+	p.pix[1] = ((s[4] & 0x07) << 4) + ((s[5] & 0xf0) >> 4)
+	p.pix[2] = ((s[5] & 0x0f) << 3) + ((s[6] & 0xe0) >> 5)
+	p.pix[3] = ((s[6] & 0x1f) << 2) + ((s[7] & 0xc0) >> 6)
+	p.pix[4] = ((s[7] & 0x3f) << 1) + ((s[8] & 0x80) >> 7)
+	p.pix[5] = s[8] & 0x7f
+	p.pix[6] = (s[9] & 0xfe) >> 1
+	p.pix[7] = ((s[9] & 0x01) << 6) + ((s[10] & 0xfc) >> 2)
+	p.pix[8] = ((s[10] & 0x03) << 5) + ((s[11] & 0xf8) >> 3)
+	p.pix[9] = ((s[11] & 0x07) << 4) + ((s[12] & 0xf0) >> 4)
+	p.pix[10] = ((s[12] & 0x0f) << 3) + ((s[13] & 0xe0) >> 5)
+	p.pix[11] = ((s[13] & 0x1f) << 2) + ((s[14] & 0xc0) >> 6)
+	p.pix[12] = ((s[14] & 0x3f) << 1) + ((s[15] & 0x80) >> 7)
+	p.pix[13] = s[15] & 0x7f
+
+	return p
+}
+
 //TODO(sjon): spec claims I should handle NULLs for ASCII
 func readByte(r io.Reader) byte {
 	var bt byte
