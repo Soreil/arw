@@ -262,16 +262,19 @@ func TestNestedHeader(t *testing.T) {
 
 	t.Logf("SR2len: %v SR2off: %v SR2key: %v\n",sr2length,sr2offset,sr2key)
 
-	buf,_ := DecryptSR2(testARW,sr2offset,sr2length,sr2key)
+	buf := DecryptSR2(testARW,sr2offset,sr2length)
 	f,_ := ioutil.TempFile(os.TempDir(),"SR2")
 	f.Write(buf)
 
 	br := bytes.NewReader(buf)
 
-	meta, err = ExtractMetaData(br, int64(sr2offset), 0)
+	meta, err = ExtractMetaData(br, 0, 0)
 	if err != nil {
 		t.Error(err)
 	}
+
+	t.Log(meta)
+
 	for _, v := range meta.FIA {
 		t.Logf("%+v\n", v)
 	}
