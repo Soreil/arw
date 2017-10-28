@@ -12,9 +12,12 @@ import (
 
 const testFileLocation = "samples"
 
+const samplename = `Y-a7r-iii-DSC00024`
+//const samplename = `1`
+
 func TestDecodeBayer(t *testing.T) {
 	os.Chdir(testFileLocation)
-	testARW, err := os.Open("1.ARW")
+	testARW, err := os.Open(samplename+".ARW")
 	if err != nil {
 		t.Error(err)
 	}
@@ -31,7 +34,6 @@ func TestDecodeBayer(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-
 
 	t.Log(readblock(buf[0:width]))
 	t.Log(readblock(buf[0:width]).Decompress())
@@ -148,7 +150,7 @@ func TestF828(t *testing.T) {
 
 func TestMetadata(t *testing.T) {
 	os.Chdir(testFileLocation)
-	testARW, err := os.Open("1.ARW")
+	testARW, err := os.Open(samplename+".ARW")
 	if err != nil {
 		t.Error(err)
 	}

@@ -132,35 +132,35 @@ type FaceInfo2 struct {
 func (f FIAval) String() string {
 	var val string
 	switch f.IFDtype {
-	case 1,7:
-		val = fmt.Sprint(*f.ascii)
-	case 2:
+	case BYTE,UNDEFINED:
+		val = fmt.Sprintf("%x",*f.ascii)
+	case ASCII:
 		val = fmt.Sprint(string(*f.ascii))
-	case 3:
+	case SHORT:
 		parts := make([]string,len(*f.short))
 		for i, short := range *f.short {
 			parts[i] = fmt.Sprint(short)
 		}
 		val = strings.Join(parts,", ")
-	case 4:
+	case LONG:
 		parts := make([]string,len(*f.long))
 		for i, long := range *f.long {
 			parts[i] = fmt.Sprint(long)
 		}
 		val = strings.Join(parts,", ")
-	case 9:
+	case SLONG:
 		parts := make([]string,len(*f.slong))
 		for i, slong := range *f.slong {
 			parts[i] = fmt.Sprint(slong)
 		}
 		val = strings.Join(parts,", ")
-	case 5:
+	case RATIONAL:
 		parts := make([]string,len(*f.rat))
 		for i, rat := range *f.rat {
 			parts[i] = fmt.Sprint(rat)
 		}
 		val = strings.Join(parts,", ")
-	case 10:
+	case SRRATIONAL:
 		parts := make([]string,len(*f.rat))
 		for i, rat := range *f.rat {
 			parts[i] = fmt.Sprint(rat)
@@ -201,6 +201,8 @@ const (
 	JPEGInterchangeFormat       IFDtag = 513
 	JPEGInterchangeFormatLength IFDtag = 514
 	YCbCrPositioning            IFDtag = 531
+
+	XMP IFDtag = 700 //http://www.adobe.com/products/xmp.html Some completely useless XML format
 
 	ShotInfo IFDtag = 0x3000
 	FileFormat IFDtag = 0xb000
