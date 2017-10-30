@@ -97,6 +97,7 @@ func TestDecodeA7R3(t *testing.T) {
 	data := *(*[]uint16)(unsafe.Pointer(&sliceheader))
 
 	img := image.NewRGBA64(image.Rect(0,0,int(rw.width),int(rw.height)))
+	img2 := image.NewRGBA64(image.Rect(0,0,int(rw.width),int(rw.height)))
 
 	for i,pix := range data {
 		var r,g,b uint16
@@ -114,154 +115,36 @@ func TestDecodeA7R3(t *testing.T) {
 				b = pix
 			}
 		}
-
 		img.Set(i%int(rw.width),i/int(rw.width),color.RGBA64{r*4,g*4,b*4,0xffff})
 	}
 
+	for y := 0; y < img.Rect.Max.Y-1; y++ {
+		for x := 0; x < img.Rect.Max.X-1; x++ {
+			var pixel color.RGBA64
+
+			l1 := img.RGBA64At(x,y)
+			l2 := img.RGBA64At(x+1,y)
+			l3 := img.RGBA64At(x,y+1)
+			l4 := img.RGBA64At(x+1,y+1)
+
+			pixel.R = l1.R +l2.R +l3.R +l4.R
+			pixel.G = l1.G +l2.G +l3.G +l4.G
+			pixel.B = l1.B +l2.B +l3.B +l4.B
+			pixel.A = 0xffff
+
+			img2.SetRGBA64(x,y,pixel)
+		}
+	}
+
 	os.Chdir("experiments")
-	f,err := os.Create("A7R3"+fmt.Sprint(time.Now().Unix())+".png")
+	f,err := os.Create("A7R3FULL"+fmt.Sprint(time.Now().Unix())+".png")
 	if err != nil {
 		t.Error(err)
 	}
 
-	for i := 0; i < 100; i++ {
-		t.Log(img.At(i,0))
-	}
+	png.Encode(f,img2)
 
-	png.Encode(f,img)
-}
-
-func TestDecodeBayer(t *testing.T) {
-	samplename := samples[craw][0]
-	testARW, err := os.Open(samplename + ".ARW")
-	if err != nil {
-		t.Error(err)
-	}
-
-	//assuming 12 bit file, 36 bits per pixel
-	//we will need 2 lines for both RG and GB values
-	const offset = 0xD5200
-	const width = 6048
-	const height = 4024
-	const rowsperstrip = height
-	const stripbytecount = 0x1735B00
-	buf := make([]byte, stripbytecount)
-	_, err = testARW.ReadAt(buf, offset)
-	if err != nil {
-		panic(err)
-	}
-
-	t.Log(readCrawBlock(buf[0:width]))
-	t.Log(readCrawBlock(buf[0:width]).Decompress())
-
-	//img := image.NewNRGBA64(image.Rect(0,0,width,height))
-	//
-	//os.Chdir("experiments")
-	//time := fmt.Sprint(time.Now().Unix())
-	//fjpg,_ := os.Create("F828"+time+".jpg")
-	//fpng,_ := os.Create("F828"+time+".png")
-	//err = jpeg.Encode(fjpg,img,&jpeg.Options{100})
-	//if err != nil {
-	//	panic(err)
-	//}
-	//err = png.Encode(fpng,img)
-	//if err != nil {
-	//	panic(err)
-	//}
-}
-
-func TestF828(t *testing.T) {
-	os.Chdir(testFileLocation)
-	testARW, err := os.Open("F828.SRF.clear")
-	if err != nil {
-		t.Error(err)
-	}
-
-	header, err := ParseHeader(testARW)
-	meta, err := ExtractMetaData(testARW, int64(header.Offset), 0)
-	if err != nil {
-		t.Error(err)
-	}
-	t.Log("0th IFD for primary image data")
-	t.Log(meta)
-
-	for _, v := range meta.FIA {
-		t.Logf("%+v\n", v)
-	}
-	for _, fia := range meta.FIA {
-		if fia.Tag == SubIFDs {
-			t.Log("Reading subIFD located at: ", fia.Offset)
-			next, err := ExtractMetaData(testARW, int64(fia.Offset), 0)
-			if err != nil {
-				t.Error(err)
-			}
-			t.Log("A subIFD, who knows what we'll find here!")
-			t.Log(next)
-		}
-
-		if fia.Tag == GPSTag {
-			gps, err := ExtractMetaData(testARW, int64(fia.Offset), 0)
-			if err != nil {
-				t.Error(err)
-			}
-
-			t.Log("GPS IFD (GPS Info Tag)")
-			t.Log(gps)
-		}
-
-		if fia.Tag == ExifTag {
-			exif, err := ExtractMetaData(testARW, int64(fia.Offset), 0)
-			if err != nil {
-				t.Error(err)
-			}
-
-			t.Log()
-			t.Log("Exif IFD (Exif Private Tag)")
-			for i, v := range exif.FIA {
-				if v.Count < 100 {
-					t.Logf("%+v\n", exif.FIAvals[i])
-				}
-				t.Logf("%+v\n", v)
-			}
-			//Just an attempt at understanding these crazy MakerNotes..
-			for i := range exif.FIA {
-				if exif.FIA[i].Tag == MakerNote {
-					makernote, err := ExtractMetaData(bytes.NewReader(*exif.FIAvals[i].ascii), 0, 0)
-					if err != nil || makernote.Count == 0 {
-						t.Error(err)
-					}
-					t.Log()
-					t.Log("Makernote")
-					t.Log(makernote.Count, makernote.Offset)
-					//t.Log(makernote)
-					for i, v := range makernote.FIA {
-						if v.Count < 1000 {
-							t.Logf("%+v\n", exif.FIAvals[i])
-						}
-						t.Logf("%+v\n", v)
-					}
-					poked, err := ExtractMetaData(testARW, int64(makernote.Offset), 0)
-					if err != nil {
-						t.Error(err)
-						t.Log(poked)
-					}
-				}
-			}
-		}
-	}
-
-	first, err := ExtractMetaData(testARW, int64(meta.Offset), 0)
-	if err != nil {
-		t.Error(err)
-	}
-
-	t.Log()
-	t.Log("First IFD for thumbnail data")
-	t.Log(first)
-
-	for _, v := range first.FIA {
-		t.Logf("%+v\n", v)
-	}
+	f.Close()
 }
 
 func TestMetadata(t *testing.T) {

@@ -230,6 +230,8 @@ const (
 	GPSTag              IFDtag = 34853
 	InteroperabilityTag IFDtag = 40965
 	PrintImageMatching  IFDtag = 50341
+	DefaultCropOrigin 	IFDtag = 50719
+	DefaultCropSize 	IFDtag = 50720
 	DNGPrivateData      IFDtag = 50740
 
 	ExposureTime             IFDtag = 33434
