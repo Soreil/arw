@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"unsafe"
 	"image/png"
+	"strings"
 )
 
 const testFileLocation = "samples"
@@ -99,10 +100,13 @@ func TestDecodeA7R3(t *testing.T) {
 	img := image.NewRGBA64(image.Rect(0,0,int(rw.width),int(rw.height)))
 	img2 := image.NewRGBA64(image.Rect(0,0,int(rw.width),int(rw.height)))
 
+	const factor16 = 4
+	const blacklevel = 512
+
 	for i,pix := range data {
 		var r,g,b uint16
-
-		if (i %int(rw.stride))% 2 == 0 {
+		pix -=blacklevel
+		if (i / int(rw.width)) % 2 == 0 {
 			if i % 2 == 0 {
 				r = pix
 			} else {
@@ -115,11 +119,11 @@ func TestDecodeA7R3(t *testing.T) {
 				b = pix
 			}
 		}
-		img.Set(i%int(rw.width),i/int(rw.width),color.RGBA64{r*4,g*4,b*4,0xffff})
+		img.Set(i%int(rw.width),i/int(rw.width),color.RGBA64{r,g,b,color.Opaque.A})
 	}
 
-	for y := 0; y < img.Rect.Max.Y-1; y++ {
-		for x := 0; x < img.Rect.Max.X-1; x++ {
+	for y := 0; y < img.Rect.Max.Y; y++ {
+		for x := 0; x < img.Rect.Max.X; x++ {
 			var pixel color.RGBA64
 
 			l1 := img.RGBA64At(x,y)
@@ -127,24 +131,45 @@ func TestDecodeA7R3(t *testing.T) {
 			l3 := img.RGBA64At(x,y+1)
 			l4 := img.RGBA64At(x+1,y+1)
 
-			pixel.R = l1.R +l2.R +l3.R +l4.R
-			pixel.G = l1.G +l2.G +l3.G +l4.G
-			pixel.B = l1.B +l2.B +l3.B +l4.B
-			pixel.A = 0xffff
+			pixel.R = (l1.R +l2.R +l3.R +l4.R)*factor16
+			pixel.G = ((l1.G +l2.G +l3.G +l4.G)/4)*factor16
+			pixel.B = (l1.B +l2.B +l3.B +l4.B)*factor16
+			pixel.A = color.Opaque.A
 
 			img2.SetRGBA64(x,y,pixel)
 		}
 	}
 
-	os.Chdir("experiments")
-	f,err := os.Create("A7R3FULL"+fmt.Sprint(time.Now().Unix())+".png")
-	if err != nil {
-		t.Error(err)
+	for y := 0; y < 500; y++ {
+		var s []string
+		for i := 0; i < 10; i++ {
+			s = append(s, fmt.Sprint(img2.RGBA64At(i,y)))
+		}
+		t.Logf("Y: %05d %v",y,strings.Join(s," "))
 	}
 
-	png.Encode(f,img2)
+	if true {
+		const prefix = "A7R3Black"
+		os.Chdir("experiments")
 
-	f.Close()
+		f,err := os.Create(prefix+fmt.Sprint(time.Now().Unix())+".jpg")
+		if err != nil {
+			t.Error(err)
+		}
+
+		jpeg.Encode(f,img2,nil)
+
+		f.Close()
+
+		f,err = os.Create(prefix+fmt.Sprint(time.Now().Unix())+".png")
+		if err != nil {
+			t.Error(err)
+		}
+
+		png.Encode(f,img2)
+
+		f.Close()
+	}
 }
 
 func TestMetadata(t *testing.T) {
