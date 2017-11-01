@@ -73,6 +73,7 @@ type FIAval struct {
 	IFDtype
 	ascii     *[]byte
 	short     *[]uint16
+	sshort	  *[]int16
 	long      *[]uint32
 	slong     *[]int32
 	rat       *[]float32
@@ -143,6 +144,12 @@ func (f FIAval) String() string {
 			parts[i] = fmt.Sprint(short)
 		}
 		val = strings.Join(parts,", ")
+	case SSHORT:
+		parts := make([]string,len(*f.sshort))
+		for i, sshort := range *f.sshort {
+			parts[i] = fmt.Sprint(sshort)
+		}
+		val = strings.Join(parts,", ")
 	case LONG:
 		parts := make([]string,len(*f.long))
 		for i, long := range *f.long {
@@ -161,7 +168,7 @@ func (f FIAval) String() string {
 			parts[i] = fmt.Sprint(rat)
 		}
 		val = strings.Join(parts,", ")
-	case SRRATIONAL:
+	case SRATIONAL:
 		parts := make([]string,len(*f.rat))
 		for i, rat := range *f.rat {
 			parts[i] = fmt.Sprint(rat)
@@ -363,7 +370,7 @@ const (
 	UNDEFINED
 	SSHORT
 	SLONG
-	SRRATIONAL
+	SRATIONAL
 )
 
 //IFDType length in bytes
@@ -375,7 +382,7 @@ func (i IFDtype) Len() int {
 		return 2
 	case LONG, SLONG:
 		return 4
-	case RATIONAL, SRRATIONAL:
+	case RATIONAL, SRATIONAL:
 		return 8
 	default:
 		return -1
@@ -422,45 +429,55 @@ func ExtractMetaData(r io.ReadSeeker, offset int64, whence int) (meta EXIFIFD, e
 		//Offset field is actually the value
 		if uint32(interop.Type.Len())*interop.Count <= 4 {
 			switch interop.Type {
-			case 1, 2, 7:
+			case UNDEFINED,ASCII,BYTE:
 				values := make([]byte, interop.Count)
 				for i := range values {
 					values[i] = byte(((interop.Offset << uint32(8*i)) & 0xff000000) >> 24)
 				}
 				meta.FIAvals[n].ascii = &values
-			case 3:
+			case SHORT:
 				values := make([]uint16, interop.Count)
 				for i := range values {
 					values[i] = uint16(((interop.Offset << uint32(16*i)) & 0xffff0000) >> 16)
 				}
 				meta.FIAvals[n].short = &values
-			case 4:
+			case SSHORT:
+				values := make([]int16, interop.Count)
+				for i := range values {
+					values[i] = int16(((interop.Offset << uint32(16*i)) & 0xffff0000) >> 16)
+				}
+				meta.FIAvals[n].sshort = &values
+			case LONG:
 				values := []uint32{interop.Count}
 				meta.FIAvals[n].long = &values
-			case 9:
+			case SLONG:
 				values := []int32{int32(interop.Count)}
 				meta.FIAvals[n].slong = &values
 			}
 		} else {
 			r.Seek(int64(interop.Offset), 0)
 			switch interop.Type {
-			case 1, 2, 7:
+			case UNDEFINED,ASCII,BYTE:
 				values := make([]byte, interop.Count)
 				binary.Read(r, b, &values)
 				meta.FIAvals[n].ascii = &values
-			case 3:
+			case SHORT:
 				values := make([]uint16, interop.Count)
 				binary.Read(r, b, &values)
 				meta.FIAvals[n].short = &values
-			case 4:
+			case SSHORT:
+				values := make([]int16, interop.Count)
+				binary.Read(r, b, &values)
+				meta.FIAvals[n].sshort = &values
+			case LONG:
 				values := make([]uint32, interop.Count)
 				binary.Read(r, b, &values)
 				meta.FIAvals[n].long = &values
-			case 9:
+			case SLONG:
 				values := make([]int32, interop.Count)
 				binary.Read(r, b, &values)
 				meta.FIAvals[n].slong = &values
-			case 5:
+			case RATIONAL:
 				values := make([]uint32, interop.Count*2)
 				binary.Read(r, b, &values)
 				floats := make([]float32,interop.Count)
@@ -468,7 +485,7 @@ func ExtractMetaData(r io.ReadSeeker, offset int64, whence int) (meta EXIFIFD, e
 					floats[i] = float32(values[i*2])/float32(values[(i*2)+1])
 				}
 				meta.FIAvals[n].rat = &floats
-			case 10:
+			case SRATIONAL:
 				values := make([]int32, interop.Count*2)
 				binary.Read(r, b, &values)
 				floats := make([]float32,interop.Count)

@@ -102,10 +102,16 @@ func TestDecodeA7R3(t *testing.T) {
 
 	const factor16 = 4
 	const blacklevel = 512
+	const brightness = 7.271094
+	const blueBalance = 1.53125
+	const greenBalance = 1.0
+	const redBalance = 2.539063
 
 	for i,pix := range data {
 		var r,g,b uint16
+
 		pix -=blacklevel
+
 		if (i / int(rw.width)) % 2 == 0 {
 			if i % 2 == 0 {
 				r = pix
@@ -122,6 +128,15 @@ func TestDecodeA7R3(t *testing.T) {
 		img.Set(i%int(rw.width),i/int(rw.width),color.RGBA64{r,g,b,color.Opaque.A})
 	}
 
+	for y := 0; y < 50; y++ {
+		var s []string
+		for i := 0; i < 5; i++ {
+			s = append(s, fmt.Sprint(img.RGBA64At(i,y)))
+		}
+		t.Logf("Y: %05d %v",y,strings.Join(s," "))
+	}
+
+
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
 			var pixel color.RGBA64
@@ -131,37 +146,39 @@ func TestDecodeA7R3(t *testing.T) {
 			l3 := img.RGBA64At(x,y+1)
 			l4 := img.RGBA64At(x+1,y+1)
 
-			pixel.R = (l1.R +l2.R +l3.R +l4.R)*factor16
-			pixel.G = ((l1.G +l2.G +l3.G +l4.G)/4)*factor16
-			pixel.B = (l1.B +l2.B +l3.B +l4.B)*factor16
+			pixel.R = uint16(float32((l1.R +l2.R +l3.R +l4.R)*factor16)*redBalance)
+			pixel.G = uint16(float32(((l1.G +l2.G +l3.G +l4.G)/2)*factor16)*greenBalance)
+			pixel.B = uint16(float32((l1.B +l2.B +l3.B +l4.B)*factor16)*blueBalance)
 			pixel.A = color.Opaque.A
 
 			img2.SetRGBA64(x,y,pixel)
 		}
 	}
 
-	for y := 0; y < 500; y++ {
+	for y := 0; y < 50; y++ {
 		var s []string
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 5; i++ {
 			s = append(s, fmt.Sprint(img2.RGBA64At(i,y)))
 		}
 		t.Logf("Y: %05d %v",y,strings.Join(s," "))
 	}
 
-	if true {
-		const prefix = "A7R3Black"
-		os.Chdir("experiments")
+	const prefix = "A7R3Black"
+	os.Chdir("experiments")
 
-		f,err := os.Create(prefix+fmt.Sprint(time.Now().Unix())+".jpg")
+	if true {
+		f, err := os.Create(prefix + fmt.Sprint(time.Now().Unix()) + ".jpg")
 		if err != nil {
 			t.Error(err)
 		}
 
-		jpeg.Encode(f,img2,nil)
+		jpeg.Encode(f, img2, nil)
 
 		f.Close()
+	}
 
-		f,err = os.Create(prefix+fmt.Sprint(time.Now().Unix())+".png")
+	if false {
+		f,err := os.Create(prefix+fmt.Sprint(time.Now().Unix())+".png")
 		if err != nil {
 			t.Error(err)
 		}
@@ -281,12 +298,13 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestNestedHeader(t *testing.T) {
-	testARW, err := os.Open("1.ARW")
+	samplename := samples[raw14][0]
+	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
 	}
 
-	meta, err := ExtractMetaData(testARW, 0xC0DA, 0)
+	meta, err := ExtractMetaData(testARW, 52082, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -326,25 +344,11 @@ func TestNestedHeader(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 	t.Log(meta)
 
 	for _, v := range meta.FIA {
 		t.Logf("%+v\n", v)
 	}
-}
-
-func TestArwPoke(t *testing.T) {
-	testARW, err := os.Open("1.ARW")
-	if err != nil {
-		t.Error(err)
-	}
-	const rawstart = 872960
-	const rawend = 25210111
-	raw := make([]byte, rawend-rawstart)
-	testARW.ReadAt(raw, rawstart)
-	f, _ := os.Create("rawoutput.arw")
-	f.Write(raw)
 }
 
 func TestJPEGDecode(t *testing.T) {
