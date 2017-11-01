@@ -182,7 +182,7 @@ const (
 	ImageHeight IFDtag = 257
 	BitsPerSample IFDtag = 258
 	Compression      IFDtag = 259
-	PhotometricInterpretation IFDtag = 262
+	PhotometricInterpretation IFDtag = 262 //32803: CFA
 	ImageDescription IFDtag = 270
 	Make             IFDtag = 271
 	Model            IFDtag = 272
@@ -225,6 +225,43 @@ const (
 	IDC_IFD IFDtag = 0x7240
 	IDC2_IFD IFDtag = 0x7241
 	MRWInfo IFDtag = 0x7250
+
+	BlackLevel                            IFDtag = 0x7300
+	WB_GRBGLevelsAuto                     IFDtag = 0x7302
+	WB_GRBGLevels                         IFDtag = 0x7303
+	BlackLevel2                           IFDtag = 0x7310
+	WB_RGGBLevels                         IFDtag = 0x7313
+	WB_RGBLevelsDaylight                  IFDtag = 0x7480
+	WB_RGBLevelsCloudy                    IFDtag = 0x7481
+	WB_RGBLevelsTungsten                  IFDtag = 0x7482
+	WB_RGBLevelsFlash                     IFDtag = 0x7483
+	WB_RGBLevels4500K                     IFDtag = 0x7484
+	WB_RGBLevelsFluorescent               IFDtag = 0x7486
+	MaxApertureAtMaxFocal                 IFDtag = 0x74a0
+	MaxApertureAtMinFocal                 IFDtag = 0x74a1
+	MaxFocalLength                        IFDtag = 0x74a2
+	MinFocalLength                        IFDtag = 0x74a3
+	SR2DataIFD                            IFDtag = 0x74c0
+	ColorMatrix                           IFDtag = 0x7800
+	WB_RGBLevelsDaylight2                  IFDtag = 0x7820
+	WB_RGBLevelsCloudy2                    IFDtag = 0x7821
+	WB_RGBLevelsTungsten2                  IFDtag = 0x7822
+	WB_RGBLevelsFlash2                     IFDtag = 0x7823
+	WB_RGBLevels4500K2                     IFDtag = 0x7824
+	WB_RGBLevelsShade2                     IFDtag = 0x7825
+	WB_RGBLevelsFluorescent2               IFDtag = 0x7826
+	WB_RGBLevelsFluorescentP1             IFDtag = 0x7827
+	WB_RGBLevelsFluorescentP2             IFDtag = 0x7828
+	WB_RGBLevelsFluorescentM1             IFDtag = 0x7829
+	WB_RGBLevels8500K                     IFDtag = 0x782a
+	WB_RGBLevels6000K                     IFDtag = 0x782b
+	WB_RGBLevels3200K                     IFDtag = 0x782c
+	WB_RGBLevels2500K                     IFDtag = 0x782d
+	WhiteLevel                            IFDtag = 0x787f
+	VignettingCorrParams                  IFDtag = 0x797d
+	ChromaticAberrationCorrParams         IFDtag = 0x7980
+	DistortionCorrParams                  IFDtag = 0x7982
+
 
 	ExifTag             IFDtag = 34665
 	GPSTag              IFDtag = 34853

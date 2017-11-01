@@ -240,8 +240,37 @@ func TestMetadata(t *testing.T) {
 				}
 			}
 		}
-	}
 
+		if fia.Tag == DNGPrivateData {
+			dng, err := ExtractMetaData(testARW, int64(fia.Offset), 0)
+			if err != nil {
+				t.Error(err)
+			}
+
+			t.Log("DNG IFD (RAW metadata)")
+			t.Log(dng)
+
+			for _, v := range dng.FIA {
+				t.Logf("%+v\n", v)
+			}
+
+			for i := range dng.FIA {
+				if dng.FIA[i].Tag == IDC_IFD {
+					idc, err := ExtractMetaData(testARW, int64(dng.FIA[i].Offset), 0)
+					if err != nil {
+						t.Error(err)
+					}
+
+					t.Log("IDC IFD (RAW metadata)")
+					t.Log(idc)
+
+					for _, v := range idc.FIA {
+						t.Logf("%+v\n", v)
+					}
+				}
+			}
+		}
+	}
 	first, err := ExtractMetaData(testARW, int64(meta.Offset), 0)
 	if err != nil {
 		t.Error(err)
