@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"unsafe"
 	"image/png"
-	"strings"
 )
 
 const testFileLocation = "samples"
@@ -37,6 +36,12 @@ type rawDetails struct {
 	offset      uint32
 	stride      uint32
 	length      uint32
+	blackLevel [4]uint16
+	WhiteBalance [4]int16
+	gammaCurve [5]uint16
+	crop image.Rectangle
+	cfaPattern [4]uint8 //TODO(sjon): This might not always be 4 bytes is my suspicion. We currently take from the offset
+	cfaPatternDim [2]uint16
 }
 
 func TestDecodeA7R3(t *testing.T) {
@@ -63,7 +68,7 @@ func TestDecodeA7R3(t *testing.T) {
 			t.Error(err)
 		}
 
-		for _, v := range rawIFD.FIA {
+		for i, v := range rawIFD.FIA {
 			switch v.Tag {
 			case ImageWidth:
 				rw.width = uint16(v.Offset)
@@ -79,7 +84,25 @@ func TestDecodeA7R3(t *testing.T) {
 				rw.stride = v.Offset/2
 			case StripByteCounts:
 				rw.length = v.Offset
-
+			case SonyCurve:
+				curve := *rawIFD.FIAvals[i].short
+				copy(rw.gammaCurve[:4],curve)
+				rw.gammaCurve[4] = 0x3fff
+			case BlackLevel2:
+				black := *rawIFD.FIAvals[i].short
+				copy(rw.blackLevel[:],black)
+			case WB_RGGBLevels:
+				balance := *rawIFD.FIAvals[i].sshort
+				copy(rw.WhiteBalance[:],balance)
+			case DefaultCropSize:
+			case CFAPattern2:
+				rw.cfaPattern[0] = uint8((v.Offset&0x000000ff)>>0)
+				rw.cfaPattern[1] = uint8((v.Offset&0x0000ff00)>>8)
+				rw.cfaPattern[2] = uint8((v.Offset&0x00ff0000)>>16)
+				rw.cfaPattern[3] = uint8((v.Offset&0xff000000)>>24)
+			case CFARepeatPatternDim:
+				rw.cfaPatternDim[0] = uint16((v.Offset*0x0000ffff)>>0)
+				rw.cfaPatternDim[1] = uint16((v.Offset*0xffff0000)>>16)
 			}
 		}
 	}
@@ -102,7 +125,6 @@ func TestDecodeA7R3(t *testing.T) {
 
 	const factor16 = 4
 	const blacklevel = 512
-	const brightness = 7.271094
 	const blueBalance = 1.53125
 	const greenBalance = 1.0
 	const redBalance = 2.539063
@@ -128,15 +150,6 @@ func TestDecodeA7R3(t *testing.T) {
 		img.Set(i%int(rw.width),i/int(rw.width),color.RGBA64{r,g,b,color.Opaque.A})
 	}
 
-	for y := 0; y < 50; y++ {
-		var s []string
-		for i := 0; i < 5; i++ {
-			s = append(s, fmt.Sprint(img.RGBA64At(i,y)))
-		}
-		t.Logf("Y: %05d %v",y,strings.Join(s," "))
-	}
-
-
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
 			var pixel color.RGBA64
@@ -155,19 +168,12 @@ func TestDecodeA7R3(t *testing.T) {
 		}
 	}
 
-	for y := 0; y < 50; y++ {
-		var s []string
-		for i := 0; i < 5; i++ {
-			s = append(s, fmt.Sprint(img2.RGBA64At(i,y)))
-		}
-		t.Logf("Y: %05d %v",y,strings.Join(s," "))
-	}
-
 	const prefix = "A7R3Black"
 	os.Chdir("experiments")
 
-	if true {
-		f, err := os.Create(prefix + fmt.Sprint(time.Now().Unix()) + ".jpg")
+	if false {
+		jpgName := prefix + fmt.Sprint(time.Now().Unix()) + ".jpg"
+		f, err := os.Create(jpgName)
 		if err != nil {
 			t.Error(err)
 		}
@@ -175,6 +181,10 @@ func TestDecodeA7R3(t *testing.T) {
 		jpeg.Encode(f, img2, nil)
 
 		f.Close()
+	}
+
+	if true {
+		display(img)
 	}
 
 	if false {
@@ -390,7 +400,7 @@ func TestJPEGDecode(t *testing.T) {
 }
 
 func TestJPEG(t *testing.T) {
-	testARW, err := os.Open("2.ARW")
+	testARW, err := os.Open("1.ARW")
 	if err != nil {
 		t.Error(err)
 	}
