@@ -12,7 +12,24 @@ import (
 	"reflect"
 	"unsafe"
 	"bytes"
+	"image"
 )
+
+type rawDetails struct {
+	width         uint16
+	height        uint16
+	bitDepth      uint16
+	rawType       sonyRawFile
+	offset        uint32
+	stride        uint32
+	length        uint32
+	blackLevel    [4]uint16
+	WhiteBalance  [4]int16
+	gammaCurve    [5]uint16
+	crop          image.Rectangle
+	cfaPattern    [4]uint8 //TODO(sjon): This might not always be 4 bytes is my suspicion. We currently take from the offset
+	cfaPatternDim [2]uint16
+}
 
 //CIPA DC-008-2012 Table 1
 type TIFFHeader struct {

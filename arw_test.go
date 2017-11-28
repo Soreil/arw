@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	"image/color"
 	"image/jpeg"
 	"image/png"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 const testFileLocation = "samples"
@@ -28,83 +25,16 @@ func init() {
 	samples[crawLossless] = append(samples[crawLossless], `DSC01373`)
 }
 
-type rawDetails struct {
-	width         uint16
-	height        uint16
-	bitDepth      uint16
-	rawType       sonyRawFile
-	offset        uint32
-	stride        uint32
-	length        uint32
-	blackLevel    [4]uint16
-	WhiteBalance  [4]int16
-	gammaCurve    [5]uint16
-	crop          image.Rectangle
-	cfaPattern    [4]uint8 //TODO(sjon): This might not always be 4 bytes is my suspicion. We currently take from the offset
-	cfaPatternDim [2]uint16
-}
-
 func TestDecodeA7R3(t *testing.T) {
 	samplename := samples[raw14][0]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
 	}
-	header, err := ParseHeader(testARW)
-	meta, err := ExtractMetaData(testARW, int64(header.Offset), 0)
+
+	rw,err := extractDetails(testARW)
 	if err != nil {
 		t.Error(err)
-	}
-
-	var rw rawDetails
-
-	for _, fia := range meta.FIA {
-		if fia.Tag != SubIFDs {
-			continue
-		}
-
-		rawIFD, err := ExtractMetaData(testARW, int64(fia.Offset), 0)
-		if err != nil {
-			t.Error(err)
-		}
-
-		for i, v := range rawIFD.FIA {
-			switch v.Tag {
-			case ImageWidth:
-				rw.width = uint16(v.Offset)
-			case ImageHeight:
-				rw.height = uint16(v.Offset)
-			case BitsPerSample:
-				rw.bitDepth = uint16(v.Offset)
-			case SonyRawFileType:
-				rw.rawType = sonyRawFile(v.Offset)
-			case StripOffsets:
-				rw.offset = v.Offset
-			case RowsPerStrip:
-				rw.stride = v.Offset / 2
-			case StripByteCounts:
-				rw.length = v.Offset
-			case SonyCurve:
-				curve := *rawIFD.FIAvals[i].short
-				copy(rw.gammaCurve[:4], curve)
-				rw.gammaCurve[4] = 0x3fff
-			case BlackLevel2:
-				black := *rawIFD.FIAvals[i].short
-				copy(rw.blackLevel[:], black)
-			case WB_RGGBLevels:
-				balance := *rawIFD.FIAvals[i].sshort
-				copy(rw.WhiteBalance[:], balance)
-			case DefaultCropSize:
-			case CFAPattern2:
-				rw.cfaPattern[0] = uint8((v.Offset & 0x000000ff) >> 0)
-				rw.cfaPattern[1] = uint8((v.Offset & 0x0000ff00) >> 8)
-				rw.cfaPattern[2] = uint8((v.Offset & 0x00ff0000) >> 16)
-				rw.cfaPattern[3] = uint8((v.Offset & 0xff000000) >> 24)
-			case CFARepeatPatternDim:
-				rw.cfaPatternDim[0] = uint16((v.Offset * 0x0000ffff) >> 0)
-				rw.cfaPatternDim[1] = uint16((v.Offset * 0xffff0000) >> 16)
-			}
-		}
 	}
 
 	buf := make([]byte, rw.length)
@@ -114,58 +44,7 @@ func TestDecodeA7R3(t *testing.T) {
 		t.Error("Not yet implemented type:", rw.rawType)
 	}
 
-	sliceheader := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
-	sliceheader.Len /= 2
-	sliceheader.Cap /= 2
-	data := *(*[]uint16)(unsafe.Pointer(&sliceheader))
-
-	img := image.NewRGBA64(image.Rect(0, 0, int(rw.width), int(rw.height)))
-	img2 := image.NewRGBA64(image.Rect(0, 0, int(rw.width), int(rw.height)))
-
-	const factor16 = 4          //This will take us from 14 bit to 16 of value range
-	const blacklevel = 512      //Taken from metadata
-	const blueBalance = 1.53125 //Taken from metadata
-	const greenBalance = 1.0    //Taken from metadata
-	const redBalance = 2.539063 //Taken from metadata
-
-	for i, pix := range data {
-		var r, g, b uint16
-
-		pix -= blacklevel
-
-		if (i/int(rw.width))%2 == 0 {
-			if i%2 == 0 {
-				r = pix
-			} else {
-				g = pix
-			}
-		} else {
-			if i%2 == 0 {
-				g = pix
-			} else {
-				b = pix
-			}
-		}
-		img.Set(i%int(rw.width), i/int(rw.width), color.RGBA64{r, g, b, color.Opaque.A})
-	}
-
-	for y := 0; y < img.Rect.Max.Y; y++ {
-		for x := 0; x < img.Rect.Max.X; x++ {
-			var pixel color.RGBA64
-
-			l1 := img.RGBA64At(x, y)
-			l2 := img.RGBA64At(x+1, y)
-			l3 := img.RGBA64At(x, y+1)
-			l4 := img.RGBA64At(x+1, y+1)
-
-			pixel.R = uint16(float32((l1.R+l2.R+l3.R+l4.R)*factor16) * redBalance)
-			pixel.G = uint16(float32(((l1.G+l2.G+l3.G+l4.G)/2)*factor16) * greenBalance)
-			pixel.B = uint16(float32((l1.B+l2.B+l3.B+l4.B)*factor16) * blueBalance)
-			pixel.A = color.Opaque.A
-
-			img2.SetRGBA64(x, y, pixel)
-		}
-	}
+	rendered16bit := readraw14(buf,rw)
 
 	const prefix = "8bit-"
 	os.Chdir("experiments")
@@ -177,16 +56,16 @@ func TestDecodeA7R3(t *testing.T) {
 			t.Error(err)
 		}
 
-		jpeg.Encode(f, img2, nil)
+		jpeg.Encode(f, rendered16bit, nil)
 
 		f.Close()
 	}
 
 	if true {
-		asRGBA := image.NewRGBA(img.Rect)
+		asRGBA := image.NewRGBA(rendered16bit.Rect)
 		for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
 			for x := asRGBA.Rect.Min.X; x < asRGBA.Rect.Max.X; x++ {
-				asRGBA.Set(x, y, img2.At(x, y))
+				asRGBA.Set(x, y, rendered16bit.At(x, y))
 			}
 		}
 		display(asRGBA) //For some reason the colours are way blown out. Printing 8 bit to a JPG works fine.
@@ -198,7 +77,7 @@ func TestDecodeA7R3(t *testing.T) {
 			t.Error(err)
 		}
 
-		png.Encode(f, img2)
+		png.Encode(f, rendered16bit)
 
 		f.Close()
 	}
