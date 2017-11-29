@@ -2,20 +2,20 @@ package arw
 
 import (
 	"image"
-	"reflect"
-	"unsafe"
 	"image/color"
 	"io"
+	"reflect"
+	"unsafe"
 )
 
-func extractDetails(rs io.ReadSeeker) (rawDetails,error){
+func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 	var rw rawDetails
 
 	header, err := ParseHeader(rs)
 	meta, err := ExtractMetaData(rs, int64(header.Offset), 0)
 	if err != nil {
-return rw,err
-}
+		return rw, err
+	}
 
 	for _, fia := range meta.FIA {
 		if fia.Tag != SubIFDs {
@@ -24,7 +24,7 @@ return rw,err
 
 		rawIFD, err := ExtractMetaData(rs, int64(fia.Offset), 0)
 		if err != nil {
-			return rw,err
+			return rw, err
 		}
 
 		for i, v := range rawIFD.FIA {
@@ -65,10 +65,10 @@ return rw,err
 			}
 		}
 	}
-	return rw,nil
+	return rw, nil
 }
 
-func readraw14(buf []byte, rw rawDetails) *image.RGBA64{
+func readraw14(buf []byte, rw rawDetails) *image.RGBA64 {
 
 	sliceheader := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
 	sliceheader.Len /= 2
@@ -83,6 +83,11 @@ func readraw14(buf []byte, rw rawDetails) *image.RGBA64{
 	const blueBalance = 1.53125 //Taken from metadata
 	const greenBalance = 1.0    //Taken from metadata
 	const redBalance = 2.539063 //Taken from metadata
+	//const blacklevel = 0;
+	//const factor16 = 1
+	//const blueBalance = 1
+	//const greenBalance = 1
+	//const redBalance = 1
 
 	for i, pix := range data {
 		var r, g, b uint16
@@ -124,4 +129,3 @@ func readraw14(buf []byte, rw rawDetails) *image.RGBA64{
 	}
 	return img2
 }
-

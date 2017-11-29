@@ -44,6 +44,8 @@ var (
 
 	pBeginPaint = user32.NewProc("BeginPaint")
 	pEndPaint   = user32.NewProc("EndPaint")
+
+	pGetWindowRect = user32.NewProc("GetWindowRect")
 )
 
 const (
@@ -102,6 +104,16 @@ const (
 	WHITENESS = 0x00FF0062
 )
 
+const (
+	BI_RGB       = 0
+	BI_RLE8      = 1
+	BI_RLE4      = 2
+	BI_BITFIELDS = 3
+	BI_JPEG      = 4
+	BI_PNG       = 5
+)
+
+//Common 40 byte header
 type bitmapinfo struct {
 	size           uint32
 	width          int32
@@ -114,13 +126,46 @@ type bitmapinfo struct {
 	ypelspermeter  int32
 	biclrused      uint32
 	biclrimportant uint32
+	redmask        uint32
+	greenmask      uint32
+	bluemask       uint32
+	alphamask      uint32
+	colorSpaceType uint32
+	Endpoints      struct {
+		red struct {
+			x uint32
+			y uint32
+			z uint32
+		}
+		green struct {
+			x uint32
+			y uint32
+			z uint32
+		}
+		blue struct {
+			x uint32
+			y uint32
+			z uint32
+		}
+	}
+	gammaRed    uint32
+	gammaGreen  uint32
+	gammaBlue   uint32
+	intent      uint32
+	profileData uint32
+	profileSize uint32
+	reserved    uint32
+}
+
+type bitmapv5header struct {
+	bitmapinfo
 }
 
 func stretchDIBits(
 	hdc syscall.Handle,
 	XDest, YDest, nDestWidth, nDestHeight, XSrc, YSrc, nSrcWidth, nSrcHeight int32,
 	bits unsafe.Pointer,
-	bitsInfo bitmapinfo,
+	bitsInfo unsafe.Pointer,
 	usage uint,
 	rop int) (int, error) {
 	ret, _, err := pStretchDIBits.Call(
@@ -134,7 +179,7 @@ func stretchDIBits(
 		uintptr(nSrcWidth),
 		uintptr(nSrcHeight),
 		uintptr(bits),
-		uintptr(unsafe.Pointer(&bitsInfo)),
+		uintptr(bitsInfo),
 		uintptr(usage),
 		uintptr(rop),
 	)
@@ -176,6 +221,18 @@ func endPaint(hwnd syscall.Handle, pnt *paint) {
 		uintptr(hwnd),
 		uintptr(unsafe.Pointer(pnt)),
 	)
+}
+
+func getWindowRect(hwnd syscall.Handle, r *rect) (bool, error) {
+	ret, _, err := pGetWindowRect.Call(
+		uintptr(hwnd),
+		uintptr(unsafe.Pointer(r)),
+	)
+	if ret == 0 {
+		return false, err
+	} else {
+		return true, nil
+	}
 }
 
 func createWindow(className, windowName string, style uint32, x, y, width, height int64, parent, menu, instance syscall.Handle) (syscall.Handle, error) {
@@ -276,6 +333,20 @@ const (
 	cCOLOR_WINDOW = 5
 )
 
+const (
+	VREDRAW         = 0x0001
+	HREDRAW         = 0x0002
+	DBLCLKS         = 0x0008
+	OWNDC           = 0x0020
+	CLASSDC         = 0x0040
+	PARENTDC        = 0x0080
+	NOCLOSE         = 0x0200
+	SAVEBITS        = 0x0800
+	BYTEALIGNCLIENT = 0x1000
+	BYTEALIGNWINDOW = 0x2000
+	GLOBALCLASS     = 0x4000
+)
+
 type tWNDCLASSEXW struct {
 	size       uint32
 	style      uint32
@@ -336,29 +407,50 @@ func display(img *image.RGBA) {
 			if err != nil {
 				panic(err)
 			}
-			x := p.rc.left
-			y := p.rc.top
-			height := p.rc.bottom - p.rc.top
-			width := p.rc.right - p.rc.left
+
+			var screen rect
+			getWindowRect(hwnd, &screen)
+
+			//x := screen.left
+			//y := screen.top
+			height := screen.bottom - screen.top
+			width := screen.right - screen.left
 			//log.Println("Planning on redering:",x,y,height,width)
-			var binfo bitmapinfo
+			var binfo bitmapv5header
 
 			binfo.height = -int32(img.Rect.Dy()) //Negative height in BMP means Windows will interpret it as having a top left origin
 			binfo.width = int32(img.Rect.Dx())
-			binfo.bitcount = 32
 			binfo.planes = 1
+			binfo.bitcount = 32
+			binfo.compression = BI_BITFIELDS
+			binfo.redmask = 0x000000FF
+			binfo.greenmask = 0x0000FF00
+			binfo.bluemask = 0x00FF0000
+			binfo.alphamask = 0xFF000000
 			binfo.size = uint32(unsafe.Sizeof(binfo))
 
 			//TODO(sjon): figure out proper origin from which to draw the buffer to be scaled, also a proper size would help
 			//This code is currently only useful for displaying the initial picture.
-			lines, err := stretchDIBits(deviceContext, int32(x), int32(y), int32(width), int32(height), 0, 0, binfo.width, -binfo.height, unsafe.Pointer(&img.Pix[0]), binfo, 0, SRCCOPY)
+			_, err = stretchDIBits(deviceContext, int32(0), int32(0), int32(width), int32(height), 0, 0, binfo.width, -binfo.height, unsafe.Pointer(&img.Pix[0]), unsafe.Pointer(&binfo), 0, SRCCOPY)
 			if err != nil {
-				log.Println(syscall.GetLastError())
-			} else {
-				log.Println(lines)
+				panic(err)
 			}
-
 			endPaint(hwnd, &p)
+
+			////We kinda want a bmp copy to test our sanity!
+			//f,err := os.Create("blitted.bmp")
+			//if err != nil {
+			//	panic(err)
+			//}
+			//binary.Write(f,binary.LittleEndian, uint16(0x4d42))
+			//binary.Write(f,binary.LittleEndian, uint32(14+int(unsafe.Sizeof(binfo))+len(img.Pix)))
+			//binary.Write(f,binary.LittleEndian,uint16(0x0000))
+			//binary.Write(f,binary.LittleEndian,uint16(0x0000))
+			//binary.Write(f,binary.LittleEndian,uint32(unsafe.Sizeof(binfo)+14))
+			//
+			//binary.Write(f,binary.LittleEndian,binfo)
+			//f.WriteAt(img.Pix,int64(unsafe.Sizeof(binfo)+14))
+			//f.Close()
 			log.Println(time.Now().Local(), "drawing done")
 
 		default:
@@ -369,6 +461,7 @@ func display(img *image.RGBA) {
 	}
 
 	wcx := tWNDCLASSEXW{
+		style:      HREDRAW | VREDRAW,
 		wndProc:    syscall.NewCallback(fn),
 		instance:   instance,
 		cursor:     cursor,
@@ -388,8 +481,8 @@ func display(img *image.RGBA) {
 		cWS_VISIBLE|cWS_OVERLAPPEDWINDOW,
 		cSW_USE_DEFAULT,
 		cSW_USE_DEFAULT,
-		int64(1800),
-		int64(1200),
+		int64(img.Rect.Dx()),
+		int64(img.Rect.Dy()),
 		0,
 		0,
 		instance,

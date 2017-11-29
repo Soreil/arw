@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"io/ioutil"
@@ -32,7 +33,7 @@ func TestDecodeA7R3(t *testing.T) {
 		t.Error(err)
 	}
 
-	rw,err := extractDetails(testARW)
+	rw, err := extractDetails(testARW)
 	if err != nil {
 		t.Error(err)
 	}
@@ -44,7 +45,14 @@ func TestDecodeA7R3(t *testing.T) {
 		t.Error("Not yet implemented type:", rw.rawType)
 	}
 
-	rendered16bit := readraw14(buf,rw)
+	rendered16bit := readraw14(buf, rw)
+
+	asRGBA := image.NewRGBA(rendered16bit.Rect)
+	for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
+		for x := asRGBA.Rect.Min.X; x < asRGBA.Rect.Max.X; x++ {
+			asRGBA.Set(x, y, rendered16bit.At(x, y))
+		}
+	}
 
 	const prefix = "8bit-"
 	os.Chdir("experiments")
@@ -56,19 +64,9 @@ func TestDecodeA7R3(t *testing.T) {
 			t.Error(err)
 		}
 
-		jpeg.Encode(f, rendered16bit, nil)
+		jpeg.Encode(f, asRGBA, nil)
 
 		f.Close()
-	}
-
-	if true {
-		asRGBA := image.NewRGBA(rendered16bit.Rect)
-		for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
-			for x := asRGBA.Rect.Min.X; x < asRGBA.Rect.Max.X; x++ {
-				asRGBA.Set(x, y, rendered16bit.At(x, y))
-			}
-		}
-		display(asRGBA) //For some reason the colours are way blown out. Printing 8 bit to a JPG works fine.
 	}
 
 	if false {
@@ -77,10 +75,37 @@ func TestDecodeA7R3(t *testing.T) {
 			t.Error(err)
 		}
 
-		png.Encode(f, rendered16bit)
+		png.Encode(f, asRGBA)
 
 		f.Close()
 	}
+	if true {
+		display(asRGBA) //For some reason the colours are way blown out. Printing 8 bit to a JPG works fine.
+	}
+}
+
+func TestViewer(t *testing.T) {
+	sampleName := `C:\Users\sjon\4f328002-2680-11e5-8616-c525bf19aff7.jpg`
+	sample, err := os.Open(sampleName)
+	if err != nil {
+		t.Error(err)
+	}
+	img, _, err := image.Decode(sample)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b := img.Bounds()
+	rgba := image.NewRGBA(b)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r32, g32, b32, a32 := img.At(x, y).RGBA()
+			c := color.RGBA{uint8(r32), uint8(g32), uint8(b32), uint8(a32)}
+			rgba.SetRGBA(x, y, c)
+		}
+	}
+
+	display(rgba)
 }
 
 func TestMetadata(t *testing.T) {
