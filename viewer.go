@@ -1,10 +1,10 @@
 package arw
 
 import (
+	"github.com/nfnt/resize"
 	"image"
 	"log"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -376,9 +376,10 @@ func translateMessage(msg *message) {
 	pTranslateMessage.Call(uintptr(unsafe.Pointer(msg)))
 }
 
-func display(img *image.RGBA) {
-	log.Println(time.Now().Local(), "GUI start")
+var displayBuffer *image.RGBA
 
+func display(img *image.RGBA) {
+	displayBuffer = img
 	className := "testClass"
 
 	instance, err := getModuleHandle()
@@ -400,7 +401,6 @@ func display(img *image.RGBA) {
 		case cWM_DESTROY:
 			postQuitMessage(0)
 		case cWM_PAINT:
-			log.Println(time.Now().Local(), "drawing start")
 
 			var p paint
 			deviceContext, err := beginPaint(hwnd, &p)
@@ -411,15 +411,19 @@ func display(img *image.RGBA) {
 			var screen rect
 			getWindowRect(hwnd, &screen)
 
-			//x := screen.left
-			//y := screen.top
-			height := screen.bottom - screen.top
-			width := screen.right - screen.left
+			height := int(screen.bottom - screen.top)
+			width := int(screen.right - screen.left)
+
+			if width != displayBuffer.Rect.Dx() || height != displayBuffer.Rect.Dy() {
+				resized := resize.Resize(uint(width), uint(height), img, resize.NearestNeighbor)
+				displayBuffer = resized.(*image.RGBA)
+			}
+
 			//log.Println("Planning on redering:",x,y,height,width)
 			var binfo bitmapv5header
 
-			binfo.height = -int32(img.Rect.Dy()) //Negative height in BMP means Windows will interpret it as having a top left origin
-			binfo.width = int32(img.Rect.Dx())
+			binfo.height = -int32(displayBuffer.Rect.Dy()) //Negative height in BMP means Windows will interpret it as having a top left origin
+			binfo.width = int32(displayBuffer.Rect.Dx())
 			binfo.planes = 1
 			binfo.bitcount = 32
 			binfo.compression = BI_BITFIELDS
@@ -431,13 +435,13 @@ func display(img *image.RGBA) {
 
 			//TODO(sjon): figure out proper origin from which to draw the buffer to be scaled, also a proper size would help
 			//This code is currently only useful for displaying the initial picture.
-			_, err = stretchDIBits(deviceContext, int32(0), int32(0), int32(width), int32(height), 0, 0, binfo.width, -binfo.height, unsafe.Pointer(&img.Pix[0]), unsafe.Pointer(&binfo), 0, SRCCOPY)
+			_, err = stretchDIBits(deviceContext, 0, 0, int32(width), int32(height), 0, 0, binfo.width, -binfo.height, unsafe.Pointer(&displayBuffer.Pix[0]), unsafe.Pointer(&binfo), 0, SRCCOPY)
 			if err != nil {
 				panic(err)
 			}
 			endPaint(hwnd, &p)
 
-			////We kinda want a bmp copy to test our sanity!
+			//We kinda want a bmp copy to test our sanity!
 			//f,err := os.Create("blitted.bmp")
 			//if err != nil {
 			//	panic(err)
@@ -451,7 +455,7 @@ func display(img *image.RGBA) {
 			//binary.Write(f,binary.LittleEndian,binfo)
 			//f.WriteAt(img.Pix,int64(unsafe.Sizeof(binfo)+14))
 			//f.Close()
-			log.Println(time.Now().Local(), "drawing done")
+			//log.Println(time.Now().Local(), "drawing done")
 
 		default:
 			ret := defWindowProc(hwnd, msg, wparam, lparam)

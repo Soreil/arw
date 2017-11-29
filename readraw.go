@@ -83,11 +83,6 @@ func readraw14(buf []byte, rw rawDetails) *image.RGBA64 {
 	const blueBalance = 1.53125 //Taken from metadata
 	const greenBalance = 1.0    //Taken from metadata
 	const redBalance = 2.539063 //Taken from metadata
-	//const blacklevel = 0;
-	//const factor16 = 1
-	//const blueBalance = 1
-	//const greenBalance = 1
-	//const redBalance = 1
 
 	for i, pix := range data {
 		var r, g, b uint16

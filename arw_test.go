@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	"image/color"
 	"image/jpeg"
 	"image/png"
 	"io/ioutil"
@@ -85,27 +84,34 @@ func TestDecodeA7R3(t *testing.T) {
 }
 
 func TestViewer(t *testing.T) {
-	sampleName := `C:\Users\sjon\4f328002-2680-11e5-8616-c525bf19aff7.jpg`
-	sample, err := os.Open(sampleName)
-	if err != nil {
-		t.Error(err)
-	}
-	img, _, err := image.Decode(sample)
+	sampleName := samples[raw14][0]
+	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
 	}
 
-	b := img.Bounds()
-	rgba := image.NewRGBA(b)
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			r32, g32, b32, a32 := img.At(x, y).RGBA()
-			c := color.RGBA{uint8(r32), uint8(g32), uint8(b32), uint8(a32)}
-			rgba.SetRGBA(x, y, c)
+	rw, err := extractDetails(sample)
+	if err != nil {
+		t.Error(err)
+	}
+
+	buf := make([]byte, rw.length)
+	sample.ReadAt(buf, int64(rw.offset))
+
+	if rw.rawType != raw14 {
+		t.Error("Not yet implemented type:", rw.rawType)
+	}
+
+	rendered16bit := readraw14(buf, rw)
+
+	asRGBA := image.NewRGBA(rendered16bit.Rect)
+	for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
+		for x := asRGBA.Rect.Min.X; x < asRGBA.Rect.Max.X; x++ {
+			asRGBA.Set(x, y, rendered16bit.At(x, y))
 		}
 	}
 
-	display(rgba)
+	display(asRGBA)
 }
 
 func TestMetadata(t *testing.T) {
