@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"image/png"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -44,43 +43,18 @@ func TestDecodeA7R3(t *testing.T) {
 		t.Error("Not yet implemented type:", rw.rawType)
 	}
 
-	rendered16bit := readraw14(buf, rw)
+	start := time.Now()
+	readraw14(buf, rw)
+	t.Log("processing duration:", time.Now().Sub(start))
 
-	asRGBA := image.NewRGBA(rendered16bit.Rect)
-	for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
-		for x := asRGBA.Rect.Min.X; x < asRGBA.Rect.Max.X; x++ {
-			asRGBA.Set(x, y, rendered16bit.At(x, y))
-		}
-	}
-
-	const prefix = "8bit-"
-	os.Chdir("experiments")
-
-	if false {
-		jpgName := prefix + fmt.Sprint(time.Now().Unix()) + ".jpg"
-		f, err := os.Create(jpgName)
-		if err != nil {
-			t.Error(err)
-		}
-
-		jpeg.Encode(f, asRGBA, nil)
-
-		f.Close()
-	}
-
-	if false {
-		f, err := os.Create(prefix + fmt.Sprint(time.Now().Unix()) + ".png")
-		if err != nil {
-			t.Error(err)
-		}
-
-		png.Encode(f, asRGBA)
-
-		f.Close()
-	}
-	if true {
-		display(asRGBA) //For some reason the colours are way blown out. Printing 8 bit to a JPG works fine.
-	}
+	//const prefix = `16bitPNG`
+	//	f, err := os.Create(prefix + fmt.Sprint(time.Now().Unix()) + ".png")
+	//	if err != nil {
+	//		t.Error(err)
+	//	}
+	//	defer f.Close()
+	//
+	//	png.Encode(f, rendered16bit)
 }
 
 func TestViewer(t *testing.T) {

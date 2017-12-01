@@ -68,59 +68,108 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 	return rw, nil
 }
 
-func readraw14(buf []byte, rw rawDetails) *image.RGBA64 {
-
+func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	sliceheader := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
 	sliceheader.Len /= 2
 	sliceheader.Cap /= 2
 	data := *(*[]uint16)(unsafe.Pointer(&sliceheader))
 
-	img := image.NewRGBA64(image.Rect(0, 0, int(rw.width), int(rw.height)))
-	img2 := image.NewRGBA64(image.Rect(0, 0, int(rw.width), int(rw.height)))
+	img := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
+	img2 := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
 
-	const factor16 = 4          //This will take us from 14 bit to 16 of value range
-	const blacklevel = 512      //Taken from metadata
+	const blackLevel = 512      //Taken from metadata
 	const blueBalance = 1.53125 //Taken from metadata
 	const greenBalance = 1.0    //Taken from metadata
 	const redBalance = 2.539063 //Taken from metadata
 
-	for i, pix := range data {
-		var r, g, b uint16
-
-		pix -= blacklevel
-
-		if (i/int(rw.width))%2 == 0 {
-			if i%2 == 0 {
-				r = pix
-			} else {
-				g = pix
-			}
-		} else {
-			if i%2 == 0 {
-				g = pix
-			} else {
-				b = pix
-			}
-		}
-		img.Set(i%int(rw.width), i/int(rw.width), color.RGBA64{r, g, b, color.Opaque.A})
-	}
-
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
-			var pixel color.RGBA64
+			var p pixel16
+			pix := data[y*img.Stride+x]
+			pix -= blackLevel
+			p.R = pix
+			img.Pix[y*img.Stride+x] = p
+			x++
 
-			l1 := img.RGBA64At(x, y)
-			l2 := img.RGBA64At(x+1, y)
-			l3 := img.RGBA64At(x, y+1)
-			l4 := img.RGBA64At(x+1, y+1)
+			var p2 pixel16
+			pix = data[y*img.Stride+x]
+			pix -= blackLevel
+			p2.G = pix
+			img.Pix[y*img.Stride+x] = p2
+		}
+		y++
 
-			pixel.R = uint16(float32((l1.R+l2.R+l3.R+l4.R)*factor16) * redBalance)
-			pixel.G = uint16(float32(((l1.G+l2.G+l3.G+l4.G)/2)*factor16) * greenBalance)
-			pixel.B = uint16(float32((l1.B+l2.B+l3.B+l4.B)*factor16) * blueBalance)
-			pixel.A = color.Opaque.A
+		for x := 0; x < img.Rect.Max.X; x++ {
+			var p pixel16
+			pix := data[y*img.Stride+x]
+			pix -= blackLevel
+			p.G = pix
+			img.Pix[y*img.Stride+x] = p
+			x++
 
-			img2.SetRGBA64(x, y, pixel)
+			var p2 pixel16
+			pix = data[y*img.Stride+x]
+			pix -= blackLevel
+			p2.B = pix
+			img.Pix[y*img.Stride+x] = p2
+		}
+	}
+
+	for y := 0; y < img.Rect.Max.Y-1; y++ {
+		for x := 0; x < img.Rect.Max.X-1; x++ {
+			var pixel pixel16
+
+			l1 := img.at(x, y)
+			l2 := img.at(x+1, y)
+			l3 := img.at(x, y+1)
+			l4 := img.at(x+1, y+1)
+
+			pixel.R = uint16(float32(l1.R+l2.R+l3.R+l4.R) * redBalance)
+			pixel.G = uint16(float32((l1.G+l2.G+l3.G+l4.G)/2) * greenBalance)
+			pixel.B = uint16(float32(l1.B+l2.B+l3.B+l4.B) * blueBalance)
+
+			img2.set(x, y, pixel)
 		}
 	}
 	return img2
+}
+
+// NewRGBA returns a new RGBA image with the given bounds.
+func NewRGB14(r image.Rectangle) *RGB14 {
+	w, h := r.Dx(), r.Dy()
+	buf := make([]pixel16, w*h)
+	return &RGB14{buf, w, r}
+}
+
+// RGBA64 is an in-memory image whose At method returns pixel16 values.
+type RGB14 struct {
+	Pix []pixel16
+	// Stride is the Pix stride between vertically adjacent pixels.
+	Stride int
+	// Rect is the image's bounds.
+	Rect image.Rectangle
+}
+
+func (r *RGB14) at(x, y int) pixel16 {
+	return r.Pix[(y*r.Stride)+x]
+}
+
+func (r *RGB14) At(x, y int) color.Color {
+	return r.at(x, y)
+}
+func (c pixel16) RGBA() (r, g, b, a uint32) {
+
+	return uint32(c.R) * 4, uint32(c.G) * 4, uint32(c.B) * 4, 0xffff
+
+}
+
+func (r *RGB14) set(x, y int, pixel pixel16) {
+	r.Pix[y*r.Stride+x] = pixel
+}
+
+type pixel16 struct {
+	R uint16
+	G uint16
+	B uint16
+	_ uint16
 }

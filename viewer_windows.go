@@ -441,7 +441,7 @@ func display(img *image.RGBA) {
 			}
 			endPaint(hwnd, &p)
 
-			//We kinda want a bmp copy to test our sanity!
+			////We kinda want a bmp copy to test our sanity!
 			//f,err := os.Create("blitted.bmp")
 			//if err != nil {
 			//	panic(err)
