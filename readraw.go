@@ -84,18 +84,9 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
-			var p pixel16
-			pix := data[y*img.Stride+x]
-			pix -= blackLevel
-			p.R = pix
-			img.Pix[y*img.Stride+x] = p
+			img.Pix[y*img.Stride+x].R = data[y*img.Stride+x] - blackLevel
 			x++
-
-			var p2 pixel16
-			pix = data[y*img.Stride+x]
-			pix -= blackLevel
-			p2.G = pix
-			img.Pix[y*img.Stride+x] = p2
+			img.Pix[y*img.Stride+x].G = data[y*img.Stride+x] - blackLevel
 		}
 		y++
 
@@ -104,34 +95,18 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 			pix := data[y*img.Stride+x]
 			pix -= blackLevel
 			p.G = pix
-			img.Pix[y*img.Stride+x] = p
+			img.Pix[y*img.Stride+x].G = data[y*img.Stride+x] - blackLevel
 			x++
 
 			var p2 pixel16
 			pix = data[y*img.Stride+x]
 			pix -= blackLevel
 			p2.B = pix
-			img.Pix[y*img.Stride+x] = p2
+			img.Pix[y*img.Stride+x].B = data[y*img.Stride+x] - blackLevel
 		}
 	}
 
-	for y := 0; y < img.Rect.Max.Y-1; y++ {
-		for x := 0; x < img.Rect.Max.X-1; x++ {
-			var pixel pixel16
-
-			l1 := img.at(x, y)
-			l2 := img.at(x+1, y)
-			l3 := img.at(x, y+1)
-			l4 := img.at(x+1, y+1)
-
-			pixel.R = uint16(float32(l1.R+l2.R+l3.R+l4.R) * redBalance)
-			pixel.G = uint16(float32((l1.G+l2.G+l3.G+l4.G)/2) * greenBalance)
-			pixel.B = uint16(float32(l1.B+l2.B+l3.B+l4.B) * blueBalance)
-
-			img2.set(x, y, pixel)
-		}
-	}
-	return img2
+	return img
 }
 
 // NewRGBA returns a new RGBA image with the given bounds.

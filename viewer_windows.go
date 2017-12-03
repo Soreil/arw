@@ -435,7 +435,10 @@ func display(img *image.RGBA) {
 
 			//TODO(sjon): figure out proper origin from which to draw the buffer to be scaled, also a proper size would help
 			//This code is currently only useful for displaying the initial picture.
-			_, err = stretchDIBits(deviceContext, 0, 0, int32(width), int32(height), 0, 0, binfo.width, -binfo.height, unsafe.Pointer(&displayBuffer.Pix[0]), unsafe.Pointer(&binfo), 0, SRCCOPY)
+			_, err = stretchDIBits(deviceContext,
+				0, 0, int32(width), int32(height),
+				0, 0, binfo.width, -binfo.height,
+				unsafe.Pointer(&displayBuffer.Pix[0]), unsafe.Pointer(&binfo), 0, SRCCOPY)
 			if err != nil {
 				panic(err)
 			}
