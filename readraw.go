@@ -8,6 +8,22 @@ import (
 	"unsafe"
 )
 
+type rawDetails struct {
+	width         uint16
+	height        uint16
+	bitDepth      uint16
+	rawType       sonyRawFile
+	offset        uint32
+	stride        uint32
+	length        uint32
+	blackLevel    [4]uint16
+	WhiteBalance  [4]int16
+	gammaCurve    [5]uint16
+	crop          image.Rectangle
+	cfaPattern    [4]uint8 //TODO(sjon): This might not always be 4 bytes is my suspicion. We currently take from the offset
+	cfaPatternDim [2]uint16
+}
+
 func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 	var rw rawDetails
 
@@ -68,6 +84,30 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 	return rw, nil
 }
 
+//The gamma curve points are in a 14 bit space space where we draw a curve that goes through the points.
+func gammacorrect(pix uint32, curve [4]uint32) uint32 {
+	const fifth = 0x3fff / 5
+	switch {
+	case pix <= fifth:
+		return (pix * 0x3fff) / curve[0]
+	case pix <= fifth*2:
+		return (pix * 0x3fff) / curve[1]
+	case pix <= fifth*3:
+		return (pix * 0x3fff) / curve[2]
+	case pix <= fifth*4:
+		return (pix * 0x3fff) / curve[3]
+	}
+	return pix
+}
+
+func process(cur uint32, black uint32, gamma [4]uint32, whitebalance uint32) uint32 {
+	cur -= black
+	cur = (cur * whitebalance) / 1024
+	//cur = gammacorrect(cur,gamma)
+
+	return cur
+}
+
 func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	sliceheader := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
 	sliceheader.Len /= 2
@@ -75,25 +115,36 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	data := *(*[]uint16)(unsafe.Pointer(&sliceheader))
 
 	img := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
-	//img2 := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
 
-	const blackLevel = 512      //Taken from metadata
-	const blueBalance = 1.53125 //Taken from metadata
-	const greenBalance = 1.0    //Taken from metadata
-	const redBalance = 2.539063 //Taken from metadata
+	var cur uint32
+	var gamma [4]uint32
+	gamma[0] = uint32(rw.gammaCurve[0])
+	gamma[1] = uint32(rw.gammaCurve[1])
+	gamma[2] = uint32(rw.gammaCurve[2])
+	gamma[3] = uint32(rw.gammaCurve[3])
 
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
-			img.Pix[y*img.Stride+x].R = uint16(float64(data[y*img.Stride+x]-blackLevel) * redBalance)
+			cur = uint32(data[y*img.Stride+x])
+			cur = process(cur, uint32(rw.blackLevel[0]), gamma, uint32(rw.WhiteBalance[0]))
+			img.Pix[y*img.Stride+x].R = uint16(cur)
 			x++
-			img.Pix[y*img.Stride+x].G = uint16(float64(data[y*img.Stride+x]-blackLevel) * greenBalance)
+
+			cur = uint32(data[y*img.Stride+x])
+			cur = process(cur, uint32(rw.blackLevel[1]), gamma, uint32(rw.WhiteBalance[1]))
+			img.Pix[y*img.Stride+x].G = uint16(cur)
 		}
 		y++
 
 		for x := 0; x < img.Rect.Max.X; x++ {
-			img.Pix[y*img.Stride+x].G = uint16(float64(data[y*img.Stride+x]-blackLevel) * greenBalance)
+			cur = uint32(data[y*img.Stride+x])
+			cur = process(cur, uint32(rw.blackLevel[2]), gamma, uint32(rw.WhiteBalance[2]))
+			img.Pix[y*img.Stride+x].G = uint16(cur)
 			x++
-			img.Pix[y*img.Stride+x].B = uint16(float64(data[y*img.Stride+x]-blackLevel) * blueBalance)
+
+			cur = uint32(data[y*img.Stride+x])
+			cur = process(cur, uint32(rw.blackLevel[3]), gamma, uint32(rw.WhiteBalance[3]))
+			img.Pix[y*img.Stride+x].B = uint16(cur)
 		}
 	}
 

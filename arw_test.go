@@ -45,6 +45,7 @@ func TestDecodeA7R3(t *testing.T) {
 	}
 
 	start := time.Now()
+	t.Log(rw.gammaCurve)
 	readraw14(buf, rw)
 	t.Log("processing duration:", time.Now().Sub(start))
 }
