@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"image/png"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -46,15 +47,6 @@ func TestDecodeA7R3(t *testing.T) {
 	start := time.Now()
 	readraw14(buf, rw)
 	t.Log("processing duration:", time.Now().Sub(start))
-
-	//const prefix = `16bitPNG`
-	//	f, err := os.Create(prefix + fmt.Sprint(time.Now().Unix()) + ".png")
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//	defer f.Close()
-	//
-	//	png.Encode(f, rendered16bit)
 }
 
 func TestViewer(t *testing.T) {
@@ -86,6 +78,36 @@ func TestViewer(t *testing.T) {
 	}
 
 	display(asRGBA)
+}
+
+func TestProcessedPNG(t *testing.T) {
+	sampleName := samples[raw14][0]
+	sample, err := os.Open(sampleName + ".ARW")
+	if err != nil {
+		t.Error(err)
+	}
+
+	rw, err := extractDetails(sample)
+	if err != nil {
+		t.Error(err)
+	}
+
+	buf := make([]byte, rw.length)
+	sample.ReadAt(buf, int64(rw.offset))
+
+	if rw.rawType != raw14 {
+		t.Error("Not yet implemented type:", rw.rawType)
+	}
+
+	rendered16bit := readraw14(buf, rw)
+	const prefix = `16bitPNG`
+	f, err := os.Create("experiments/" + prefix + fmt.Sprint(time.Now().Unix()) + ".png")
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Close()
+
+	png.Encode(f, rendered16bit)
 }
 
 func TestMetadata(t *testing.T) {

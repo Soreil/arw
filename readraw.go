@@ -75,7 +75,7 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	data := *(*[]uint16)(unsafe.Pointer(&sliceheader))
 
 	img := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
-	img2 := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
+	//img2 := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
 
 	const blackLevel = 512      //Taken from metadata
 	const blueBalance = 1.53125 //Taken from metadata
@@ -84,25 +84,35 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
-			img.Pix[y*img.Stride+x].R = data[y*img.Stride+x] - blackLevel
+			img.Pix[y*img.Stride+x].R = uint16(float64(data[y*img.Stride+x]-blackLevel) * redBalance)
 			x++
-			img.Pix[y*img.Stride+x].G = data[y*img.Stride+x] - blackLevel
+			img.Pix[y*img.Stride+x].G = uint16(float64(data[y*img.Stride+x]-blackLevel) * greenBalance)
 		}
 		y++
 
 		for x := 0; x < img.Rect.Max.X; x++ {
-			var p pixel16
-			pix := data[y*img.Stride+x]
-			pix -= blackLevel
-			p.G = pix
-			img.Pix[y*img.Stride+x].G = data[y*img.Stride+x] - blackLevel
+			img.Pix[y*img.Stride+x].G = uint16(float64(data[y*img.Stride+x]-blackLevel) * greenBalance)
 			x++
+			img.Pix[y*img.Stride+x].B = uint16(float64(data[y*img.Stride+x]-blackLevel) * blueBalance)
+		}
+	}
 
-			var p2 pixel16
-			pix = data[y*img.Stride+x]
-			pix -= blackLevel
-			p2.B = pix
-			img.Pix[y*img.Stride+x].B = data[y*img.Stride+x] - blackLevel
+	for y := 0; y < img.Rect.Max.Y; y++ {
+		for x := 0; x < img.Rect.Max.X; x++ {
+			img.Pix[y*img.Stride+x].G = img.Pix[y*img.Stride+x+1].G
+			img.Pix[y*img.Stride+x].B = img.Pix[(y+1)*img.Stride+x+1].B
+			x++
+			img.Pix[y*img.Stride+x].R = img.Pix[y*img.Stride+x-1].R
+			img.Pix[y*img.Stride+x].B = img.Pix[(y+1)*img.Stride+x].B
+		}
+		y++
+
+		for x := 0; x < img.Rect.Max.X; x++ {
+			img.Pix[y*img.Stride+x].R = img.Pix[(y-1)*img.Stride+x].R
+			img.Pix[y*img.Stride+x].B = img.Pix[y*img.Stride+x+1].B
+			x++
+			img.Pix[y*img.Stride+x].R = img.Pix[(y-1)*img.Stride+x-1].R
+			img.Pix[y*img.Stride+x].G = img.Pix[y*img.Stride+x-1].G
 		}
 	}
 
@@ -132,6 +142,15 @@ func (r *RGB14) at(x, y int) pixel16 {
 func (r *RGB14) At(x, y int) color.Color {
 	return r.at(x, y)
 }
+
+func (r *RGB14) Bounds() image.Rectangle {
+	return r.Rect.Bounds()
+}
+
+func (r *RGB14) ColorModel() color.Model {
+	return color.RGBA64Model
+}
+
 func (c pixel16) RGBA() (r, g, b, a uint32) {
 
 	return uint32(c.R) * 4, uint32(c.G) * 4, uint32(c.B) * 4, 0xffff
