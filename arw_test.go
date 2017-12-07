@@ -20,6 +20,7 @@ func init() {
 	os.Chdir(testFileLocation)
 	samples = make(map[sonyRawFile][]string)
 	samples[raw14] = append(samples[raw14], `Y-a7r-iii-DSC00024`)
+	samples[raw14] = append(samples[raw14], `A7r3 balloon`)
 	samples[raw12] = append(samples[raw12], `DSC01373`)
 	samples[craw] = append(samples[craw], `1`)
 	samples[crawLossless] = append(samples[crawLossless], `DSC01373`)

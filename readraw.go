@@ -6,7 +6,6 @@ import (
 	"image/color"
 	"io"
 	"log"
-	"math"
 	"reflect"
 	"unsafe"
 )
@@ -100,6 +99,7 @@ func vandermonde(a []float64, degree int) *mat64.Dense {
 
 //This function is created by gammacorrect
 var gamma func(uint32) uint32
+var xfactors [6]float64
 
 //The gamma curve points are in a 14 bit space space where we draw a curve that goes through the points.
 func gammacorrect(curve [4]uint32) {
@@ -119,21 +119,34 @@ func gammacorrect(curve [4]uint32) {
 		log.Println(err)
 	}
 
+	xfactors[5] = c.At(5, 0)
+	xfactors[4] = c.At(4, 0)
+	xfactors[3] = c.At(3, 0)
+	xfactors[2] = c.At(2, 0)
+	xfactors[1] = c.At(1, 0)
+	xfactors[0] = c.At(0, 0)
+
 	gamma = func(g uint32) uint32 {
 		if g > 0x3fff {
 			return 0x3fff //TODO(sjon): Should it be concidered a bug if we receive blown out values here?
 		}
-		x := (float64(g) / 0x3fff) * 5 //We need to keep x in between 0 and 5, this maps to 0x0 to 0x3fff
-		x5 := c.At(5, 0) * math.Pow(x, 5)
-		x4 := c.At(4, 0) * math.Pow(x, 4)
-		x3 := c.At(3, 0) * math.Pow(x, 3)
-		x2 := c.At(2, 0) * math.Pow(x, 2)
-		x1 := c.At(1, 0) * math.Pow(x, 1)
-		x0 := c.At(0, 0) * math.Pow(x, 0)
+		x := float64(g) / 0xccc //We need to keep x in between 0 and 5, this maps to 0x0 to 0x3fff
+
+		// power := 1.0;
+		// termSum := 0.0;
+		//for i := 0; i < len(xfactors); i++ {
+		//	termSum += xfactors[i] * power;
+		//	power *= x;
+		//}
+		//return uint32(termSum);
+
+		x5 := xfactors[5] * x * x * x * x * x
+		x4 := xfactors[4] * x * x * x * x
+		x3 := xfactors[3] * x * x * x
+		x2 := xfactors[2] * x * x
+		x1 := xfactors[1] * x
+		x0 := xfactors[0] * 1
 		val := x5 + x4 + x3 + x2 + x1 + x0 //The negative signs are already in the numbers
-		if val > 0x3fff {
-			//panic("unexpectedly high gamma conversion result")
-		}
 		return uint32(val)
 	}
 }
