@@ -98,8 +98,26 @@ func vandermonde(a []float64, degree int) *mat64.Dense {
 }
 
 //This function is created by gammacorrect
-var gamma func(uint32) uint32
 var xfactors [6]float64
+
+func gamma(x float64) uint32 {
+	if x > 0x3fff {
+		return 0x3fff //TODO(sjon): Should it be concidered a bug if we receive blown out values here?
+	}
+	/*TODO(sjon): What should the correct value be here? Lower values seem to work for most inputs
+	the building sample works ok with 0x200 but the baloon sample clips in multiple places with values lower than 0xcc
+	*/
+	x /= 0xCCC //We need to keep x in between 0 and 5, this maps to 0x0 to 0x3fff
+
+	x5 := xfactors[5] * x * x * x * x * x
+	x4 := xfactors[4] * x * x * x * x
+	x3 := xfactors[3] * x * x * x
+	x2 := xfactors[2] * x * x
+	x1 := xfactors[1] * x
+	x0 := xfactors[0] * 1
+	val := x5 + x4 + x3 + x2 + x1 + x0 //The negative signs are already in the numbers
+	return uint32(val)
+}
 
 //The gamma curve points are in a 14 bit space space where we draw a curve that goes through the points.
 func gammacorrect(curve [4]uint32) {
@@ -125,42 +143,17 @@ func gammacorrect(curve [4]uint32) {
 	xfactors[2] = c.At(2, 0)
 	xfactors[1] = c.At(1, 0)
 	xfactors[0] = c.At(0, 0)
-
-	gamma = func(g uint32) uint32 {
-		if g > 0x3fff {
-			return 0x3fff //TODO(sjon): Should it be concidered a bug if we receive blown out values here?
-		}
-		x := float64(g) / 0xccc //We need to keep x in between 0 and 5, this maps to 0x0 to 0x3fff
-
-		// power := 1.0;
-		// termSum := 0.0;
-		//for i := 0; i < len(xfactors); i++ {
-		//	termSum += xfactors[i] * power;
-		//	power *= x;
-		//}
-		//return uint32(termSum);
-
-		x5 := xfactors[5] * x * x * x * x * x
-		x4 := xfactors[4] * x * x * x * x
-		x3 := xfactors[3] * x * x * x
-		x2 := xfactors[2] * x * x
-		x1 := xfactors[1] * x
-		x0 := xfactors[0] * 1
-		val := x5 + x4 + x3 + x2 + x1 + x0 //The negative signs are already in the numbers
-		return uint32(val)
-	}
 }
 
-func process(cur uint32, black uint32, whitebalance uint32) uint32 {
+func process(cur uint32, black uint32, whiteBalance float64) uint32 {
 	if cur <= black {
 		return cur
 	} else {
 		cur -= black
 	}
 
-	cur = (cur * whitebalance) / 1024
-	cur = gamma(cur)
-	return cur
+	balanced := float64(cur) * whiteBalance
+	return gamma(balanced)
 }
 
 func readraw14(buf []byte, rw rawDetails) *RGB14 {
@@ -179,27 +172,48 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	gamma[3] = uint32(rw.gammaCurve[3])
 	gammacorrect(gamma)
 
+	var whiteBalanceRGGB [4]float64
+	var maxBalance int16
+	if rw.WhiteBalance[0] > rw.WhiteBalance[1] {
+		maxBalance = rw.WhiteBalance[0]
+	} else {
+		maxBalance = rw.WhiteBalance[1]
+	}
+	if rw.WhiteBalance[2] > maxBalance {
+		maxBalance = rw.WhiteBalance[2]
+	}
+	if rw.WhiteBalance[3] > maxBalance {
+		maxBalance = rw.WhiteBalance[3]
+	}
+
+	whiteBalanceRGGB[0] = float64(rw.WhiteBalance[0]) / float64(maxBalance)
+	whiteBalanceRGGB[1] = float64(rw.WhiteBalance[1]) / float64(maxBalance)
+	whiteBalanceRGGB[2] = float64(rw.WhiteBalance[2]) / float64(maxBalance)
+	whiteBalanceRGGB[3] = float64(rw.WhiteBalance[3]) / float64(maxBalance)
+
+	log.Println(whiteBalanceRGGB)
+
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
 			cur = uint32(data[y*img.Stride+x])
-			cur = process(cur, uint32(rw.blackLevel[0]), uint32(rw.WhiteBalance[0]))
+			cur = process(cur, uint32(rw.blackLevel[0]), whiteBalanceRGGB[0])
 			img.Pix[y*img.Stride+x].R = uint16(cur)
 			x++
 
 			cur = uint32(data[y*img.Stride+x])
-			cur = process(cur, uint32(rw.blackLevel[1]), uint32(rw.WhiteBalance[1]))
+			cur = process(cur, uint32(rw.blackLevel[1]), whiteBalanceRGGB[1])
 			img.Pix[y*img.Stride+x].G = uint16(cur)
 		}
 		y++
 
 		for x := 0; x < img.Rect.Max.X; x++ {
 			cur = uint32(data[y*img.Stride+x])
-			cur = process(cur, uint32(rw.blackLevel[2]), uint32(rw.WhiteBalance[2]))
+			cur = process(cur, uint32(rw.blackLevel[2]), whiteBalanceRGGB[2])
 			img.Pix[y*img.Stride+x].G = uint16(cur)
 			x++
 
 			cur = uint32(data[y*img.Stride+x])
-			cur = process(cur, uint32(rw.blackLevel[3]), uint32(rw.WhiteBalance[3]))
+			cur = process(cur, uint32(rw.blackLevel[3]), whiteBalanceRGGB[3])
 			img.Pix[y*img.Stride+x].B = uint16(cur)
 		}
 	}
@@ -259,9 +273,8 @@ func (r *RGB14) ColorModel() color.Model {
 }
 
 func (c pixel16) RGBA() (r, g, b, a uint32) {
-
 	return uint32(c.R) * 4, uint32(c.G) * 4, uint32(c.B) * 4, 0xffff
-
+	//return uint32(c.R), uint32(c.G), uint32(c.B), 0xffff
 }
 
 func (r *RGB14) set(x, y int, pixel pixel16) {

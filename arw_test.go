@@ -27,7 +27,7 @@ func init() {
 }
 
 func TestDecodeA7R3(t *testing.T) {
-	samplename := samples[raw14][0]
+	samplename := samples[raw14][1]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -52,7 +52,7 @@ func TestDecodeA7R3(t *testing.T) {
 }
 
 func TestViewer(t *testing.T) {
-	sampleName := samples[raw14][0]
+	sampleName := samples[raw14][1]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -83,7 +83,7 @@ func TestViewer(t *testing.T) {
 }
 
 func TestProcessedPNG(t *testing.T) {
-	sampleName := samples[raw14][0]
+	sampleName := samples[raw14][1]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -113,7 +113,7 @@ func TestProcessedPNG(t *testing.T) {
 }
 
 func TestMetadata(t *testing.T) {
-	samplename := samples[raw14][0]
+	samplename := samples[raw14][1]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
