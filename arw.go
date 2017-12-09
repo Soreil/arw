@@ -204,10 +204,13 @@ const (
 	ResolutionUnit            IFDtag = 296
 	Software                  IFDtag = 305
 	DateTime                  IFDtag = 306
+	Whitepoint                IFDtag = 318
+	PrimaryChromaticities     IFDtag = 319
 	SubIFDs                   IFDtag = 330
 
 	JPEGInterchangeFormat       IFDtag = 513
 	JPEGInterchangeFormatLength IFDtag = 514
+	YCbCrCoefficients           IFDtag = 529
 	YCbCrPositioning            IFDtag = 531
 
 	XMP IFDtag = 700 //http://www.adobe.com/products/xmp.html Some completely useless XML format
@@ -288,6 +291,9 @@ const (
 	ExifVersion              IFDtag = 36864
 	DateTimeOriginal         IFDtag = 36867
 	DateTimeDigitized        IFDtag = 36868
+	OffsetTime               IFDtag = 36880
+	OffsetTimeOriginal       IFDtag = 36881
+	OffsetTimeDigitized      IFDtag = 36882
 	ComponentsConfiguration  IFDtag = 37121
 	CompressedBitsPerPixel   IFDtag = 37122
 	ShutterSpeedValue        IFDtag = 37377
@@ -337,9 +343,9 @@ const (
 	ImageUniqueID            IFDtag = 42016
 	LensSpecification        IFDtag = 42034
 	LensModel                IFDtag = 42036
-
-	CFARepeatPatternDim IFDtag = 0x828d
-	CFAPattern2         IFDtag = 0x828e
+	Gamma                    IFDtag = 42240
+	CFARepeatPatternDim      IFDtag = 0x828d
+	CFAPattern2              IFDtag = 0x828e
 )
 
 //go:generate stringer -type=sonyRawFile

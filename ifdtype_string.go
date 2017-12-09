@@ -6,12 +6,12 @@ import "fmt"
 
 const (
 	_IFDtype_name_0 = "UNKNOWNTYPEBYTEASCIISHORTLONGRATIONAL"
-	_IFDtype_name_1 = "UNDEFINEDSSHORTSLONGSRRATIONAL"
+	_IFDtype_name_1 = "UNDEFINEDSSHORTSLONGSRATIONAL"
 )
 
 var (
 	_IFDtype_index_0 = [...]uint8{0, 11, 15, 20, 25, 29, 37}
-	_IFDtype_index_1 = [...]uint8{0, 9, 15, 20, 30}
+	_IFDtype_index_1 = [...]uint8{0, 9, 15, 20, 29}
 )
 
 func (i IFDtype) String() string {
