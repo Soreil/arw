@@ -16,21 +16,29 @@ const testFileLocation = "samples"
 
 var samples map[sonyRawFile][]string
 
+const currentSample = 2
+
 func init() {
 	os.Chdir(testFileLocation)
+
 	samples = make(map[sonyRawFile][]string)
+
 	samples[raw14] = append(samples[raw14], `Y-a7r-iii-DSC00024`)
-	samples[raw14] = append(samples[raw14], `A7r3 balloon`)
+	samples[raw14] = append(samples[raw14], `4379231197`)
+	samples[raw14] = append(samples[raw14], `4538279284`)
+	samples[raw14] = append(samples[raw14], `5132423552`)
+
 	samples[raw12] = append(samples[raw12], `DSC01373`)
+
 	samples[craw] = append(samples[craw], `1`)
-	samples[crawLossless] = append(samples[crawLossless], `DSC01373`)
 }
 
 func TestDecodeA7R3(t *testing.T) {
-	samplename := samples[raw14][1]
+	samplename := samples[raw14][currentSample]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
+		t.FailNow()
 	}
 
 	rw, err := extractDetails(testARW)
@@ -52,7 +60,7 @@ func TestDecodeA7R3(t *testing.T) {
 }
 
 func TestViewer(t *testing.T) {
-	sampleName := samples[raw14][1]
+	sampleName := samples[raw14][currentSample]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -83,7 +91,7 @@ func TestViewer(t *testing.T) {
 }
 
 func TestProcessedPNG(t *testing.T) {
-	sampleName := samples[raw14][1]
+	sampleName := samples[raw14][currentSample]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -113,7 +121,7 @@ func TestProcessedPNG(t *testing.T) {
 }
 
 func TestMetadata(t *testing.T) {
-	samplename := samples[raw14][1]
+	samplename := samples[raw14][currentSample]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -221,7 +229,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestNestedHeader(t *testing.T) {
-	samplename := samples[raw14][0]
+	samplename := samples[raw14][currentSample]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
