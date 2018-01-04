@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"reflect"
 	"strings"
@@ -549,7 +550,8 @@ const pixelBlockSize = 16
 type pixel uint16
 
 func (p crawPixelBlock) String() string {
-	return fmt.Sprintf("%011b\n%011b\n%04b\n%04b\n%08b", p.max, p.min, p.maxidx, p.minidx, p.pix)
+	//return fmt.Sprintf("%011b\n%011b\n%04b\n%04b\n%08b", p.max, p.min, p.maxidx, p.minidx, p.pix)
+	return fmt.Sprintf("Max: %v\tMin: %v\nMaxIdx: %v\tMinIdx: %v\nDeltas: %v\n", p.max, p.min, p.maxidx, p.minidx, p.pix)
 }
 
 func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
@@ -558,9 +560,11 @@ func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 	var ordinary int
 
 	if p.max < p.min {
+		log.Println(p)
 		panic("Expected max to be larger than min")
 	}
 	if p.maxidx == p.minidx {
+		log.Println(p)
 		panic("Expected non overlapping min and max position")
 	}
 

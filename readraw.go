@@ -1,6 +1,7 @@
 package arw
 
 import (
+	"fmt"
 	"github.com/gonum/matrix/mat64"
 	"image"
 	"image/color"
@@ -58,7 +59,7 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 			case StripOffsets:
 				rw.offset = v.Offset
 			case RowsPerStrip:
-				rw.stride = v.Offset / 2
+				rw.stride = v.Offset //TODO(sjon): Uncompressed RAW files are 2 bytes per pixel whereas CRAW is 1 byte per pixel, this shouldn't be set here! current behaviour is for CRAW, add a divide by 2 for RAW
 			case StripByteCounts:
 				rw.length = v.Offset
 			case SonyCurve:
@@ -194,7 +195,9 @@ func readCRAW(buf []byte, rw rawDetails) *RGB14 {
 		for x := 0; x < img.Rect.Max.X; x += 32 {
 
 			if y%2 == 0 {
-				red := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress()                                 //16 red pixels, inverleaved with following 16 green
+				fmt.Printf("Red block on line: %v\t column: %v\n", y, x)
+				red := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress() //16 red pixels, inverleaved with following 16 green
+				fmt.Printf("Green block on line: %v\t column: %v\n", y, x+pixelBlockSize)
 				green := readCrawBlock(buf[y*int(rw.stride)+x+pixelBlockSize : y*int(rw.stride)+x+pixelBlockSize+pixelBlockSize]).Decompress() // idem
 
 				base := y*img.Stride + x
@@ -203,7 +206,9 @@ func readCRAW(buf []byte, rw rawDetails) *RGB14 {
 					img.Pix[base+(i*2)+1].G = uint16(green[i])
 				}
 			} else {
-				green := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress()                              //16 red pixels, inverleaved with following 16 green
+				fmt.Printf("Green block on line: %v\t column: %v\n", y, x)
+				green := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress() //16 red pixels, inverleaved with following 16 green
+				fmt.Printf("Blue block on line: %v\t column: %v\n", y, x+pixelBlockSize)
 				blue := readCrawBlock(buf[y*int(rw.stride)+x+pixelBlockSize : y*int(rw.stride)+x+pixelBlockSize+pixelBlockSize]).Decompress() // idem
 
 				base := y*img.Stride + x
