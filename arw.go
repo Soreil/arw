@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"reflect"
 	"strings"
@@ -555,8 +554,16 @@ func (p crawPixelBlock) String() string {
 
 func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 	var pix [pixelBlockSize]pixel
-	factor := uint8(1 << uint8(math.Ceil(math.Log2(float64(p.max-p.min)/128))))
+	factor := 1<<uint8(math.Ceil(math.Log2(float64(p.max-p.min)/128))) + 1
 	var ordinary int
+
+	if p.max < p.min {
+		panic("Expected max to be larger than min")
+	}
+	if p.maxidx == p.minidx {
+		panic("Expected non overlapping min and max position")
+	}
+
 	for i := 0; i < pixelBlockSize; i++ {
 		switch i {
 		case int(p.maxidx):
@@ -564,8 +571,7 @@ func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 		case int(p.minidx):
 			pix[i] = pixel(p.min)
 		default:
-			log.Println(p.min, p.max, p.max-p.min, factor)
-			pix[i] = pixel(p.min) + pixel(p.pix[ordinary]*factor)
+			pix[i] = pixel(p.min) + pixel(p.pix[ordinary]*uint8(factor))
 			ordinary++
 		}
 	}
@@ -575,26 +581,28 @@ func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 func readCrawBlock(s []byte) crawPixelBlock {
 	var p crawPixelBlock
 
-	p.max = ((uint16(s[0]) & 0xff) << 3) + (uint16(s[1])&0xe0)>>5
-	p.min = ((uint16(s[1]) & 0x1f) << 6) + (uint16(s[2])&0xfc)>>2
+	val := b.Uint32(s)
+	max := uint16(0x7ff & (val >> 0))
+	min := uint16(0x7ff & (val >> 11))
+	maxidx := uint8(0x0f & (val >> 22))
+	minidx := uint8(0x0f & (val >> 26))
 
-	p.maxidx = ((s[2] & 0x03) << 2) + (s[3]&0xc0)>>6
-	p.minidx = (s[3] & 0x3c) >> 2
+	for bit, i := 30, 0; i < len(p.pix); i++ {
+		var val uint16
+		if bit>>3 != 15 { // We will read off the end of the slice if we read a uint16 at the last byte
+			val = b.Uint16(s[bit>>3:])
+		} else {
+			val = uint16(s[15])
+		}
 
-	p.pix[0] = ((s[3] & 0x03) << 5) + ((s[4] & 0xf8) >> 3)
-	p.pix[1] = ((s[4] & 0x07) << 4) + ((s[5] & 0xf0) >> 4)
-	p.pix[2] = ((s[5] & 0x0f) << 3) + ((s[6] & 0xe0) >> 5)
-	p.pix[3] = ((s[6] & 0x1f) << 2) + ((s[7] & 0xc0) >> 6)
-	p.pix[4] = ((s[7] & 0x3f) << 1) + ((s[8] & 0x80) >> 7)
-	p.pix[5] = s[8] & 0x7f
-	p.pix[6] = (s[9] & 0xfe) >> 1
-	p.pix[7] = ((s[9] & 0x01) << 6) + ((s[10] & 0xfc) >> 2)
-	p.pix[8] = ((s[10] & 0x03) << 5) + ((s[11] & 0xf8) >> 3)
-	p.pix[9] = ((s[11] & 0x07) << 4) + ((s[12] & 0xf0) >> 4)
-	p.pix[10] = ((s[12] & 0x0f) << 3) + ((s[13] & 0xe0) >> 5)
-	p.pix[11] = ((s[13] & 0x1f) << 2) + ((s[14] & 0xc0) >> 6)
-	p.pix[12] = ((s[14] & 0x3f) << 1) + ((s[15] & 0x80) >> 7)
-	p.pix[13] = s[15] & 0x7f
+		p.pix[i] = uint8(val >> uint((bit&0x7)&0x7f))
+		bit += 7
+	}
+
+	p.max = max
+	p.min = min
+	p.maxidx = maxidx
+	p.minidx = minidx
 
 	return p
 }

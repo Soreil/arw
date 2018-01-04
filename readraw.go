@@ -100,8 +100,9 @@ func vandermonde(a []float64, degree int) *mat64.Dense {
 //This function is created by gammacorrect
 var xfactors [6]float64
 
-func gamma(x float64) uint32 {
+func gamma(x float64) float64 {
 	if x > 0x3fff {
+		panic("This shouldn't be happening!")
 		return 0x3fff //TODO(sjon): Should it be concidered a bug if we receive blown out values here?
 	}
 	/*TODO(sjon): What should the correct value be here? Lower values seem to work for most inputs
@@ -116,7 +117,7 @@ func gamma(x float64) uint32 {
 	x1 := xfactors[1] * x
 	x0 := xfactors[0] * 1
 	val := x5 + x4 + x3 + x2 + x1 + x0 //The negative signs are already in the numbers
-	return uint32(val)
+	return val
 }
 
 //The gamma curve points are in a 14 bit space space where we draw a curve that goes through the points.
@@ -146,6 +147,8 @@ func gammacorrect(curve [4]uint32) {
 }
 
 func process(cur uint32, black uint32, whiteBalance float64) uint32 {
+	const gammaspace = 1.596472423
+
 	if cur <= black {
 		return cur
 	} else {
@@ -153,7 +156,66 @@ func process(cur uint32, black uint32, whiteBalance float64) uint32 {
 	}
 
 	balanced := float64(cur) * whiteBalance
-	return gamma(balanced)
+	return uint32(gamma(balanced) * gammaspace)
+}
+
+func readCRAW(buf []byte, rw rawDetails) *RGB14 {
+	img := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
+
+	var gamma [4]uint32
+	gamma[0] = uint32(rw.gammaCurve[0])
+	gamma[1] = uint32(rw.gammaCurve[1])
+	gamma[2] = uint32(rw.gammaCurve[2])
+	gamma[3] = uint32(rw.gammaCurve[3])
+	gammacorrect(gamma)
+
+	var whiteBalanceRGGB [4]float64
+	var maxBalance int16
+	if rw.WhiteBalance[0] > rw.WhiteBalance[1] {
+		maxBalance = rw.WhiteBalance[0]
+	} else {
+		maxBalance = rw.WhiteBalance[1]
+	}
+	if rw.WhiteBalance[2] > maxBalance {
+		maxBalance = rw.WhiteBalance[2]
+	}
+	if rw.WhiteBalance[3] > maxBalance {
+		maxBalance = rw.WhiteBalance[3]
+	}
+
+	whiteBalanceRGGB[0] = float64(rw.WhiteBalance[0]) / float64(maxBalance)
+	whiteBalanceRGGB[1] = float64(rw.WhiteBalance[1]) / float64(maxBalance)
+	whiteBalanceRGGB[2] = float64(rw.WhiteBalance[2]) / float64(maxBalance)
+	whiteBalanceRGGB[3] = float64(rw.WhiteBalance[3]) / float64(maxBalance)
+
+	log.Println(whiteBalanceRGGB)
+
+	for y := 0; y < img.Rect.Max.Y; y++ {
+		for x := 0; x < img.Rect.Max.X; x += 32 {
+
+			if y%2 == 0 {
+				red := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress()                                 //16 red pixels, inverleaved with following 16 green
+				green := readCrawBlock(buf[y*int(rw.stride)+x+pixelBlockSize : y*int(rw.stride)+x+pixelBlockSize+pixelBlockSize]).Decompress() // idem
+
+				base := y*img.Stride + x
+				for i := 0; i < pixelBlockSize; i++ {
+					img.Pix[base+(i*2)].R = uint16(red[i])
+					img.Pix[base+(i*2)+1].G = uint16(green[i])
+				}
+			} else {
+				green := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress()                              //16 red pixels, inverleaved with following 16 green
+				blue := readCrawBlock(buf[y*int(rw.stride)+x+pixelBlockSize : y*int(rw.stride)+x+pixelBlockSize+pixelBlockSize]).Decompress() // idem
+
+				base := y*img.Stride + x
+				for i := 0; i < pixelBlockSize; i++ {
+					img.Pix[base+(i*2)].G = uint16(green[i])
+					img.Pix[base+(i*2)+1].B = uint16(blue[i])
+				}
+			}
+		}
+	}
+
+	return img
 }
 
 func readraw14(buf []byte, rw rawDetails) *RGB14 {

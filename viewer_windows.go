@@ -257,9 +257,10 @@ func createWindow(className, windowName string, style uint32, x, y, width, heigh
 }
 
 const (
-	cWM_DESTROY = 0x0002
-	cWM_CLOSE   = 0x0010
-	cWM_PAINT   = 0x000F
+	cWM_DESTROY           = 0x0002
+	cWM_CLOSE             = 0x0010
+	cWM_PAINT             = 0x000F
+	cWM_WINDOWPOSCHANGING = 0x0046
 )
 
 func defWindowProc(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintptr {
@@ -362,6 +363,16 @@ type tWNDCLASSEXW struct {
 	iconSm     syscall.Handle
 }
 
+type tWINDOWPOS struct {
+	hwnd            syscall.Handle
+	hwndInsertAfter syscall.Handle
+	x               int
+	y               int
+	cx              int
+	cy              int
+	flags           uint
+}
+
 func registerClassEx(wcx *tWNDCLASSEXW) (uint16, error) {
 	ret, _, err := pRegisterClassExW.Call(
 		uintptr(unsafe.Pointer(wcx)),
@@ -378,7 +389,7 @@ func translateMessage(msg *message) {
 
 var displayBuffer *image.RGBA
 
-func display(img *image.RGBA) {
+func display(img *image.RGBA, name string) {
 	displayBuffer = img
 	className := "testClass"
 
@@ -400,6 +411,10 @@ func display(img *image.RGBA) {
 			destroyWindow(hwnd)
 		case cWM_DESTROY:
 			postQuitMessage(0)
+			//case cWM_WINDOWPOSCHANGING:
+			//	var t *tWINDOWPOS
+			//	t = (*tWINDOWPOS)(unsafe.Pointer(lparam))
+			//	log.Println(t)
 		case cWM_PAINT:
 
 			var p paint
@@ -484,12 +499,12 @@ func display(img *image.RGBA) {
 
 	_, err = createWindow(
 		className,
-		"Test Window",
+		name,
 		cWS_VISIBLE|cWS_OVERLAPPEDWINDOW,
 		cSW_USE_DEFAULT,
 		cSW_USE_DEFAULT,
-		int64(img.Rect.Dx()),
-		int64(img.Rect.Dy()),
+		int64(img.Rect.Dx())/4,
+		int64(img.Rect.Dy())/4,
 		0,
 		0,
 		instance,

@@ -16,7 +16,7 @@ const testFileLocation = "samples"
 
 var samples map[sonyRawFile][]string
 
-const currentSample = 2
+const currentSample = 1
 
 func init() {
 	os.Chdir(testFileLocation)
@@ -87,7 +87,38 @@ func TestViewer(t *testing.T) {
 		}
 	}
 
-	display(asRGBA)
+	display(asRGBA, sampleName)
+}
+
+func TestViewerCRAW(t *testing.T) {
+	sampleName := samples[craw][0]
+	sample, err := os.Open(sampleName + ".ARW")
+	if err != nil {
+		t.Error(err)
+	}
+
+	rw, err := extractDetails(sample)
+	if err != nil {
+		t.Error(err)
+	}
+
+	buf := make([]byte, rw.length)
+	sample.ReadAt(buf, int64(rw.offset))
+
+	if rw.rawType != craw {
+		t.Error("Not yet implemented type:", rw.rawType)
+	}
+
+	rendered16bit := readCRAW(buf, rw)
+
+	asRGBA := image.NewRGBA(rendered16bit.Rect)
+	for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
+		for x := asRGBA.Rect.Min.X; x < asRGBA.Rect.Max.X; x++ {
+			asRGBA.Set(x, y, rendered16bit.At(x, y))
+		}
+	}
+
+	display(asRGBA, sampleName)
 }
 
 func TestProcessedPNG(t *testing.T) {
