@@ -1,7 +1,6 @@
 package arw
 
 import (
-	"fmt"
 	"github.com/gonum/matrix/mat64"
 	"image"
 	"image/color"
@@ -83,7 +82,18 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 				rw.cfaPatternDim[1] = uint16((v.Offset * 0xffff0000) >> 16)
 			}
 		}
+		if rw.rawType == craw {
+			for i, v := range rawIFD.FIA {
+				switch v.Tag {
+				case BlackLevel:
+					black := *rawIFD.FIAvals[i].short
+					copy(rw.blackLevel[:], black)
+					//wah
+				}
+			}
+		}
 	}
+
 	return rw, nil
 }
 
@@ -193,27 +203,46 @@ func readCRAW(buf []byte, rw rawDetails) *RGB14 {
 
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x += 32 {
-
 			if y%2 == 0 {
-				fmt.Printf("Red block on line: %v\t column: %v\n", y, x)
-				red := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress() //16 red pixels, inverleaved with following 16 green
-				fmt.Printf("Green block on line: %v\t column: %v\n", y, x+pixelBlockSize)
-				green := readCrawBlock(buf[y*int(rw.stride)+x+pixelBlockSize : y*int(rw.stride)+x+pixelBlockSize+pixelBlockSize]).Decompress() // idem
+				//fmt.Printf("Red block on line: %v\t column: %v\n", y, x)
+				block := readCrawBlock(buf[y*int(rw.width)+x : y*int(rw.width)+x+pixelBlockSize]) //16 red pixels, inverleaved with following 16 green
+				red := block.Decompress()
+
+				//fmt.Printf("Green block on line: %v\t column: %v\n", y, x+pixelBlockSize)
+				block = readCrawBlock(buf[y*int(rw.width)+x+pixelBlockSize : y*int(rw.width)+x+pixelBlockSize+pixelBlockSize]) // idem
+				green := block.Decompress()
 
 				base := y*img.Stride + x
 				for i := 0; i < pixelBlockSize; i++ {
+					for ir := range red {
+						red[ir] = pixel(process(uint32(red[ir]), uint32(rw.blackLevel[0]), whiteBalanceRGGB[0]))
+					}
 					img.Pix[base+(i*2)].R = uint16(red[i])
+
+					for ir := range green {
+						green[ir] = pixel(process(uint32(green[ir]), uint32(rw.blackLevel[1]), whiteBalanceRGGB[1]))
+					}
 					img.Pix[base+(i*2)+1].G = uint16(green[i])
 				}
 			} else {
-				fmt.Printf("Green block on line: %v\t column: %v\n", y, x)
-				green := readCrawBlock(buf[y*int(rw.stride)+x : y*int(rw.stride)+x+pixelBlockSize]).Decompress() //16 red pixels, inverleaved with following 16 green
-				fmt.Printf("Blue block on line: %v\t column: %v\n", y, x+pixelBlockSize)
-				blue := readCrawBlock(buf[y*int(rw.stride)+x+pixelBlockSize : y*int(rw.stride)+x+pixelBlockSize+pixelBlockSize]).Decompress() // idem
+				//fmt.Printf("Green block on line: %v\t column: %v\n", y, x)
+				block := readCrawBlock(buf[y*int(rw.width)+x : y*int(rw.width)+x+pixelBlockSize]) //16 red pixels, inverleaved with following 16 green
+				green := block.Decompress()
+
+				//fmt.Printf("Blue block on line: %v\t column: %v\n", y, x+pixelBlockSize)
+				block = readCrawBlock(buf[y*int(rw.width)+x+pixelBlockSize : y*int(rw.width)+x+pixelBlockSize+pixelBlockSize]) // idem
+				blue := block.Decompress()
 
 				base := y*img.Stride + x
 				for i := 0; i < pixelBlockSize; i++ {
+					for ir := range green {
+						green[ir] = pixel(process(uint32(green[ir]), uint32(rw.blackLevel[2]), whiteBalanceRGGB[2]))
+					}
 					img.Pix[base+(i*2)].G = uint16(green[i])
+
+					for ir := range blue {
+						blue[ir] = pixel(process(uint32(blue[ir]), uint32(rw.blackLevel[3]), whiteBalanceRGGB[3]))
+					}
 					img.Pix[base+(i*2)+1].B = uint16(blue[i])
 				}
 			}
