@@ -503,8 +503,8 @@ func display(img *image.RGBA, name string) {
 		cWS_VISIBLE|cWS_OVERLAPPEDWINDOW,
 		cSW_USE_DEFAULT,
 		cSW_USE_DEFAULT,
-		int64(img.Rect.Dx())/4,
-		int64(img.Rect.Dy())/4,
+		int64(img.Rect.Dx())/2, //TODO(sjon): We need to set width and height based on image or screen size. 80% screen might be good?
+		int64(img.Rect.Dy())/2,
 		0,
 		0,
 		instance,

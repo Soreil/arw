@@ -2,7 +2,6 @@
 package arw
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -503,11 +502,14 @@ func ExtractMetaData(r io.ReadSeeker, offset int64, whence int) (meta EXIFIFD, e
 	return
 }
 
+//TODO(sjon): We probably want to generate this pad ourselves if we ever discover versions of ARW which use a real key.
+//All current variants just have a default placeholder in the key field.
 var pad = []uint32{0xae567acf, 0x3758b80d, 0x7c2906a5, 0x1a30e50c, 0xa4fff8d4, 0x5ad0ba02, 0xb0adfde3, 0x80c0bf1c, 0x28a40a6e, 0xb5210a3c, 0x3013ee1b, 0x6ac26b41, 0x306ec9eb, 0xbfc7c3fa, 0x01fa4ee0, 0xaa0b5077, 0x63280f17, 0x2b98271b, 0xc4a483ee, 0x0327efd8, 0x4f1919f3, 0x507e9187, 0x167b353b, 0xa7b2fcbe, 0xb2c45890, 0xef99db72, 0x497fdb56, 0x91564e98, 0xf777078d, 0xfd9e2bd5, 0x7c11b8b7, 0xd890cb9a, 0x16cd7e75, 0x4b1cc09f, 0xd4b88d85, 0x2719170a, 0x85ebe6e1, 0xd80aae2b, 0xa2a6d6c8, 0xfe277243, 0x4e9a6052, 0x4d5ab8d1, 0xd9796c35, 0x66fb9425, 0x2fc719ce, 0x574259e8, 0xed7debf6, 0x62729b9b, 0x8475e571, 0x6b6084e7, 0xd2101c0e, 0x12243ef8, 0xaccaf2ff, 0xf388743f, 0xfdb4dde3, 0xc259958e, 0xa3fc5e38, 0x63a2c363, 0xbd9006b7, 0x43f7adda, 0x3dd8b01e, 0x41aadc72, 0x01916c53, 0x04bae250, 0x7892b89b, 0x8b207c44, 0xf206a891, 0x1e353d29, 0x14292114, 0x2b2b82da, 0xcd5f120b, 0x6a3c7ee7, 0xb2ed663e, 0x822ef87b, 0xff64e96a, 0xd0250c39, 0x9a121fa9, 0xa516e885, 0xcbecec87, 0xea66c879, 0xa3fce75d, 0x9fe040f8, 0xd12016b4, 0xeb0c1103, 0xe5b8e3d3, 0xe8d8a3f6, 0x6930ebcf, 0x06a865eb, 0x18111138, 0xdde18c3b, 0xe342f4ef, 0xb793d2a1, 0xf7a7caaf, 0xd4e4bc34, 0x29ca7d80, 0xc6eedc2a, 0xbcdb6e5f, 0x2514c03c, 0x2a2326be, 0xc7f5392c, 0x2cf191c2, 0xc4c3f321, 0x0ca46ff9, 0x066c941b, 0x40aafc77, 0x855fcf74, 0x981c261d, 0x0667b6de, 0xb16db5d5, 0x0771f254, 0x53e22691, 0x022c8814, 0xc41f2789, 0x0abaf480, 0x2ffb0330, 0x112cf928, 0xd7c94972, 0x362c1b50, 0xf0659484, 0x4f00c4f1, 0x4f58bbed, 0xf258be43, 0x7f7b5ed2, 0x7ab1f464, 0x6046ca7f, 0x11d3954e, 0x3e7a285b, 0x00000000}
 
-func DecryptSR2(r io.ReaderAt, offset uint32, length uint32) []byte {
+func DecryptSR2(r io.ReadSeeker, offset uint32, length uint32) []byte {
 	buf := make([]byte, length)
-	r.ReadAt(buf, int64(offset))
+	r.Seek(int64(offset), 0)
+	r.Read(buf)
 	header := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
 	header.Len /= 4
 	header.Cap /= 4
@@ -541,13 +543,9 @@ type crawPixelBlock struct {
 	pix    [14]uint8
 }
 
-type rawPixelBlock struct {
-	pix [16]uint16
-}
-
 const pixelBlockSize = 16
 
-type pixel uint16
+type pixel = uint16
 
 func (p crawPixelBlock) String() string {
 	//return fmt.Sprintf("%011b\n%011b\n%04b\n%04b\n%08b", p.max, p.min, p.maxidx, p.minidx, p.pix)
@@ -582,6 +580,7 @@ func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 	return pix
 }
 
+//readCrawBlock reads a 16 byte compressed CRAW block in to a workable datastructure.
 func readCrawBlock(s []byte) crawPixelBlock {
 	var p crawPixelBlock
 
@@ -608,15 +607,5 @@ func readCrawBlock(s []byte) crawPixelBlock {
 	p.maxidx = maxidx
 	p.minidx = minidx
 
-	return p
-}
-
-func readRawBlock(s []byte) rawPixelBlock {
-	var p rawPixelBlock
-
-	r := bytes.NewReader(s)
-	for i := range p.pix {
-		binary.Read(r, b, &p.pix[i])
-	}
 	return p
 }

@@ -1,6 +1,7 @@
 package arw
 
 import (
+	"bytes"
 	"github.com/gonum/matrix/mat64"
 	"image"
 	"image/color"
@@ -36,59 +37,94 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 	}
 
 	for _, fia := range meta.FIA {
-		if fia.Tag != SubIFDs {
-			continue
-		}
-
-		rawIFD, err := ExtractMetaData(rs, int64(fia.Offset), 0)
-		if err != nil {
-			return rw, err
-		}
-
-		for i, v := range rawIFD.FIA {
-			switch v.Tag {
-			case ImageWidth:
-				rw.width = uint16(v.Offset)
-			case ImageHeight:
-				rw.height = uint16(v.Offset)
-			case BitsPerSample:
-				rw.bitDepth = uint16(v.Offset)
-			case SonyRawFileType:
-				rw.rawType = sonyRawFile(v.Offset)
-			case StripOffsets:
-				rw.offset = v.Offset
-			case RowsPerStrip:
-				rw.stride = v.Offset //TODO(sjon): Uncompressed RAW files are 2 bytes per pixel whereas CRAW is 1 byte per pixel, this shouldn't be set here! current behaviour is for CRAW, add a divide by 2 for RAW
-			case StripByteCounts:
-				rw.length = v.Offset
-			case SonyCurve:
-				curve := *rawIFD.FIAvals[i].short
-				copy(rw.gammaCurve[:4], curve)
-				rw.gammaCurve[4] = 0x3fff
-			case BlackLevel2:
-				black := *rawIFD.FIAvals[i].short
-				copy(rw.blackLevel[:], black)
-			case WB_RGGBLevels:
-				balance := *rawIFD.FIAvals[i].sshort
-				copy(rw.WhiteBalance[:], balance)
-			case DefaultCropSize:
-			case CFAPattern2:
-				rw.cfaPattern[0] = uint8((v.Offset & 0x000000ff) >> 0)
-				rw.cfaPattern[1] = uint8((v.Offset & 0x0000ff00) >> 8)
-				rw.cfaPattern[2] = uint8((v.Offset & 0x00ff0000) >> 16)
-				rw.cfaPattern[3] = uint8((v.Offset & 0xff000000) >> 24)
-			case CFARepeatPatternDim:
-				rw.cfaPatternDim[0] = uint16((v.Offset * 0x0000ffff) >> 0)
-				rw.cfaPatternDim[1] = uint16((v.Offset * 0xffff0000) >> 16)
+		if fia.Tag == SubIFDs {
+			rawIFD, err := ExtractMetaData(rs, int64(fia.Offset), 0)
+			if err != nil {
+				return rw, err
 			}
-		}
-		if rw.rawType == craw {
+
 			for i, v := range rawIFD.FIA {
 				switch v.Tag {
-				case BlackLevel:
+				case ImageWidth:
+					rw.width = uint16(v.Offset)
+				case ImageHeight:
+					rw.height = uint16(v.Offset)
+				case BitsPerSample:
+					rw.bitDepth = uint16(v.Offset)
+				case SonyRawFileType:
+					rw.rawType = sonyRawFile(v.Offset)
+				case StripOffsets:
+					rw.offset = v.Offset
+				case RowsPerStrip:
+					rw.stride = v.Offset //TODO(sjon): Uncompressed RAW files are 2 bytes per pixel whereas CRAW is 1 byte per pixel, this shouldn't be set here! current behaviour is for CRAW, add a divide by 2 for RAW
+				case StripByteCounts:
+					rw.length = v.Offset
+				case SonyCurve:
+					curve := *rawIFD.FIAvals[i].short
+					copy(rw.gammaCurve[:4], curve)
+					rw.gammaCurve[4] = 0x3fff
+				case BlackLevel2:
 					black := *rawIFD.FIAvals[i].short
 					copy(rw.blackLevel[:], black)
-					//wah
+				case WB_RGGBLevels:
+					balance := *rawIFD.FIAvals[i].sshort
+					copy(rw.WhiteBalance[:], balance)
+				case DefaultCropSize:
+				case CFAPattern2:
+					rw.cfaPattern[0] = uint8((v.Offset & 0x000000ff) >> 0)
+					rw.cfaPattern[1] = uint8((v.Offset & 0x0000ff00) >> 8)
+					rw.cfaPattern[2] = uint8((v.Offset & 0x00ff0000) >> 16)
+					rw.cfaPattern[3] = uint8((v.Offset & 0xff000000) >> 24)
+				case CFARepeatPatternDim:
+					rw.cfaPatternDim[0] = uint16((v.Offset * 0x0000ffff) >> 0)
+					rw.cfaPatternDim[1] = uint16((v.Offset * 0xffff0000) >> 16)
+				}
+			}
+		}
+
+		if fia.Tag == DNGPrivateData {
+			dng, err := ExtractMetaData(rs, int64(fia.Offset), 0)
+			if err != nil {
+				return rw, err
+			}
+
+			var sr2offset uint32
+			var sr2length uint32
+			var sr2key [4]byte
+
+			for i := range dng.FIA {
+				if dng.FIA[i].Tag == SR2SubIFDOffset {
+					offset := dng.FIA[i].Offset
+					sr2offset = offset
+				}
+				if dng.FIA[i].Tag == SR2SubIFDLength {
+					sr2length = dng.FIA[i].Offset
+				}
+				if dng.FIA[i].Tag == SR2SubIFDKey {
+					key := dng.FIA[i].Offset*0x0edd + 1
+					sr2key[3] = byte((key >> 24) & 0xff)
+					sr2key[2] = byte((key >> 16) & 0xff)
+					sr2key[1] = byte((key >> 8) & 0xff)
+					sr2key[0] = byte((key) & 0xff)
+				}
+			}
+
+			buf := DecryptSR2(rs, sr2offset, sr2length)
+			br := bytes.NewReader(buf)
+
+			sr2, err := ExtractMetaData(br, 0, 0)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			for i, v := range sr2.FIA {
+				switch v.Tag {
+				case BlackLevel2:
+					black := *sr2.FIAvals[i].short
+					copy(rw.blackLevel[:], black)
+				case WB_RGGBLevels:
+					balance := *sr2.FIAvals[i].sshort
+					copy(rw.WhiteBalance[:], balance)
 				}
 			}
 		}
@@ -113,7 +149,7 @@ var xfactors [6]float64
 
 func gamma(x float64) float64 {
 	if x > 0x3fff {
-		panic("This shouldn't be happening!")
+		//panic("This shouldn't be happening!")
 		return 0x3fff //TODO(sjon): Should it be concidered a bug if we receive blown out values here?
 	}
 	/*TODO(sjon): What should the correct value be here? Lower values seem to work for most inputs
