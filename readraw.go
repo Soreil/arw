@@ -240,48 +240,68 @@ func readCRAW(buf []byte, rw rawDetails) *RGB14 {
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x += 32 {
 			if y%2 == 0 {
+				base := y*img.Stride + x
+
 				//fmt.Printf("Red block on line: %v\t column: %v\n", y, x)
-				block := readCrawBlock(buf[y*int(rw.width)+x : y*int(rw.width)+x+pixelBlockSize]) //16 red pixels, inverleaved with following 16 green
+				block := readCrawBlock(buf[base : base+pixelBlockSize]) //16 red pixels, inverleaved with following 16 green
 				red := block.Decompress()
 
 				//fmt.Printf("Green block on line: %v\t column: %v\n", y, x+pixelBlockSize)
-				block = readCrawBlock(buf[y*int(rw.width)+x+pixelBlockSize : y*int(rw.width)+x+pixelBlockSize+pixelBlockSize]) // idem
+				block = readCrawBlock(buf[base+pixelBlockSize : base+pixelBlockSize+pixelBlockSize]) // idem
 				green := block.Decompress()
 
-				base := y*img.Stride + x
-				for i := 0; i < pixelBlockSize; i++ {
-					for ir := range red {
-						red[ir] = pixel(process(uint32(red[ir]), uint32(rw.blackLevel[0]), whiteBalanceRGGB[0]))
-					}
-					img.Pix[base+(i*2)].R = uint16(red[i])
+				for ir := range red {
+					red[ir] = pixel(process(uint32(red[ir]), uint32(rw.blackLevel[0]), whiteBalanceRGGB[0]))
+				}
 
-					for ir := range green {
-						green[ir] = pixel(process(uint32(green[ir]), uint32(rw.blackLevel[1]), whiteBalanceRGGB[1]))
-					}
+				for ir := range green {
+					green[ir] = pixel(process(uint32(green[ir]), uint32(rw.blackLevel[1]), whiteBalanceRGGB[1]))
+				}
+				for i := 0; i < pixelBlockSize; i++ {
+					img.Pix[base+(i*2)].R = uint16(red[i])
 					img.Pix[base+(i*2)+1].G = uint16(green[i])
 				}
 			} else {
 				//fmt.Printf("Green block on line: %v\t column: %v\n", y, x)
-				block := readCrawBlock(buf[y*int(rw.width)+x : y*int(rw.width)+x+pixelBlockSize]) //16 red pixels, inverleaved with following 16 green
+				base := y*img.Stride + x
+
+				block := readCrawBlock(buf[base : base+pixelBlockSize]) //16 red pixels, inverleaved with following 16 green
 				green := block.Decompress()
 
-				//fmt.Printf("Blue block on line: %v\t column: %v\n", y, x+pixelBlockSize)
-				block = readCrawBlock(buf[y*int(rw.width)+x+pixelBlockSize : y*int(rw.width)+x+pixelBlockSize+pixelBlockSize]) // idem
+				//fmt.Printf("Green block on line: %v\t column: %v\n", y, x+pixelBlockSize)
+				block = readCrawBlock(buf[base+pixelBlockSize : base+pixelBlockSize+pixelBlockSize]) // idem
 				blue := block.Decompress()
 
-				base := y*img.Stride + x
-				for i := 0; i < pixelBlockSize; i++ {
-					for ir := range green {
-						green[ir] = pixel(process(uint32(green[ir]), uint32(rw.blackLevel[2]), whiteBalanceRGGB[2]))
-					}
-					img.Pix[base+(i*2)].G = uint16(green[i])
+				for ir := range green {
+					green[ir] = pixel(process(uint32(green[ir]), uint32(rw.blackLevel[0]), whiteBalanceRGGB[0]))
+				}
 
-					for ir := range blue {
-						blue[ir] = pixel(process(uint32(blue[ir]), uint32(rw.blackLevel[3]), whiteBalanceRGGB[3]))
-					}
+				for ir := range blue {
+					blue[ir] = pixel(process(uint32(blue[ir]), uint32(rw.blackLevel[1]), whiteBalanceRGGB[1]))
+				}
+				for i := 0; i < pixelBlockSize; i++ {
+					img.Pix[base+(i*2)].G = uint16(green[i])
 					img.Pix[base+(i*2)+1].B = uint16(blue[i])
 				}
 			}
+		}
+	}
+	for y := 0; y < img.Rect.Max.Y; y++ {
+		for x := 0; x < img.Rect.Max.X; x++ {
+			img.Pix[y*img.Stride+x].G = img.Pix[y*img.Stride+x+1].G
+			img.Pix[y*img.Stride+x].B = img.Pix[(y+1)*img.Stride+x+1].B
+			x++
+			img.Pix[y*img.Stride+x].R = img.Pix[y*img.Stride+x-1].R
+			img.Pix[y*img.Stride+x].B = img.Pix[(y+1)*img.Stride+x].B
+		}
+		y++
+
+		for x := 0; x < img.Rect.Max.X; x++ {
+			img.Pix[y*img.Stride+x].R = img.Pix[(y-1)*img.Stride+x].R
+			img.Pix[y*img.Stride+x].B = img.Pix[y*img.Stride+x+1].B
+			x++
+			img.Pix[y*img.Stride+x].R = img.Pix[(y-1)*img.Stride+x-1].R
+			img.Pix[y*img.Stride+x].G = img.Pix[y*img.Stride+x-1].G
 		}
 	}
 
@@ -405,7 +425,7 @@ func (r *RGB14) ColorModel() color.Model {
 }
 
 func (c pixel16) RGBA() (r, g, b, a uint32) {
-	return uint32(c.R) * 4, uint32(c.G) * 4, uint32(c.B) * 4, 0xffff
+	return uint32(c.R << 2), uint32(c.G << 2), uint32(c.B << 2), 0xffff
 	//return uint32(c.R), uint32(c.G), uint32(c.B), 0xffff
 }
 

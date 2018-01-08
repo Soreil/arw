@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"reflect"
 	"strings"
 	"unsafe"
@@ -554,7 +553,7 @@ func (p crawPixelBlock) String() string {
 
 func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 	var pix [pixelBlockSize]pixel
-	factor := 1<<uint8(math.Ceil(math.Log2(float64(p.max-p.min)/128))) + 1
+	factor := (p.max - p.min) / 128
 	var ordinary int
 
 	if p.max < p.min {
@@ -573,7 +572,7 @@ func (p crawPixelBlock) Decompress() [pixelBlockSize]pixel {
 		case int(p.minidx):
 			pix[i] = pixel(p.min)
 		default:
-			pix[i] = pixel(p.min) + pixel(p.pix[ordinary]*uint8(factor))
+			pix[i] = pixel(p.min) + pixel(p.pix[ordinary]<<factor)
 			ordinary++
 		}
 	}

@@ -16,6 +16,7 @@ const testFileLocation = "samples"
 var samples map[sonyRawFile][]string
 
 const currentSample = 0
+const currentCategory = craw
 
 func init() {
 	os.Chdir(testFileLocation)
@@ -33,7 +34,7 @@ func init() {
 }
 
 func TestDecodeA7R3(t *testing.T) {
-	samplename := samples[raw14][currentSample]
+	samplename := samples[currentCategory][currentSample]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -59,7 +60,7 @@ func TestDecodeA7R3(t *testing.T) {
 }
 
 func TestViewer(t *testing.T) {
-	sampleName := samples[raw14][currentSample]
+	sampleName := samples[currentCategory][currentSample]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -90,7 +91,7 @@ func TestViewer(t *testing.T) {
 }
 
 func TestViewerCRAW(t *testing.T) {
-	sampleName := samples[craw][currentSample]
+	sampleName := samples[currentCategory][currentSample]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -123,7 +124,7 @@ func TestViewerCRAW(t *testing.T) {
 }
 
 func TestProcessedPNG(t *testing.T) {
-	sampleName := samples[raw14][currentSample]
+	sampleName := samples[currentCategory][currentSample]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -137,11 +138,14 @@ func TestProcessedPNG(t *testing.T) {
 	buf := make([]byte, rw.length)
 	sample.ReadAt(buf, int64(rw.offset))
 
-	if rw.rawType != raw14 {
-		t.Error("Not yet implemented type:", rw.rawType)
+	var rendered16bit *RGB14
+	if rw.rawType == raw14 {
+		rendered16bit = readraw14(buf, rw)
+	}
+	if rw.rawType == craw {
+		rendered16bit = readCRAW(buf, rw)
 	}
 
-	rendered16bit := readraw14(buf, rw)
 	const prefix = `16bitPNG`
 	f, err := os.Create("experiments/" + prefix + fmt.Sprint(time.Now().Unix()) + ".png")
 	if err != nil {
@@ -153,7 +157,7 @@ func TestProcessedPNG(t *testing.T) {
 }
 
 func TestMetadata(t *testing.T) {
-	samplename := samples[craw][currentSample]
+	samplename := samples[currentCategory][currentSample]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -301,7 +305,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestNestedHeader(t *testing.T) {
-	samplename := samples[raw14][currentSample]
+	samplename := samples[currentCategory][currentSample]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
