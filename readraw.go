@@ -1,7 +1,6 @@
 package arw
 
 import (
-	"bytes"
 	"github.com/gonum/matrix/mat64"
 	"image"
 	"image/color"
@@ -82,54 +81,55 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 			}
 		}
 
-		if fia.Tag == DNGPrivateData {
-			dng, err := ExtractMetaData(rs, int64(fia.Offset), 0)
-			if err != nil {
-				return rw, err
-			}
-
-			var sr2offset uint32
-			var sr2length uint32
-			var sr2key [4]byte
-
-			for i := range dng.FIA {
-				if dng.FIA[i].Tag == SR2SubIFDOffset {
-					offset := dng.FIA[i].Offset
-					sr2offset = offset
-				}
-				if dng.FIA[i].Tag == SR2SubIFDLength {
-					sr2length = dng.FIA[i].Offset
-				}
-				if dng.FIA[i].Tag == SR2SubIFDKey {
-					key := dng.FIA[i].Offset*0x0edd + 1
-					sr2key[3] = byte((key >> 24) & 0xff)
-					sr2key[2] = byte((key >> 16) & 0xff)
-					sr2key[1] = byte((key >> 8) & 0xff)
-					sr2key[0] = byte((key) & 0xff)
-				}
-			}
-
-			buf := DecryptSR2(rs, sr2offset, sr2length)
-			br := bytes.NewReader(buf)
-
-			sr2, err := ExtractMetaData(br, 0, 0)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			for i, v := range sr2.FIA {
-				switch v.Tag {
-				case BlackLevel2:
-					black := *sr2.FIAvals[i].short
-					copy(rw.blackLevel[:], black)
-				case WB_RGGBLevels:
-					balance := *sr2.FIAvals[i].sshort
-					copy(rw.WhiteBalance[:], balance)
-				}
-			}
-		}
+		//if fia.Tag == DNGPrivateData {
+		//	dng, err := ExtractMetaData(rs, int64(fia.Offset), 0)
+		//	if err != nil {
+		//		return rw, err
+		//	}
+		//
+		//	var sr2offset uint32
+		//	var sr2length uint32
+		//	var sr2key [4]byte
+		//
+		//	for i := range dng.FIA {
+		//		if dng.FIA[i].Tag == SR2SubIFDOffset {
+		//			offset := dng.FIA[i].Offset
+		//			sr2offset = offset
+		//		}
+		//		if dng.FIA[i].Tag == SR2SubIFDLength {
+		//			sr2length = dng.FIA[i].Offset
+		//		}
+		//		if dng.FIA[i].Tag == SR2SubIFDKey {
+		//			key := dng.FIA[i].Offset*0x0edd + 1
+		//			sr2key[3] = byte((key >> 24) & 0xff)
+		//			sr2key[2] = byte((key >> 16) & 0xff)
+		//			sr2key[1] = byte((key >> 8) & 0xff)
+		//			sr2key[0] = byte((key) & 0xff)
+		//		}
+		//	}
+		//
+		//	buf := DecryptSR2(rs, sr2offset, sr2length)
+		//	br := bytes.NewReader(buf)
+		//
+		//	sr2, err := ExtractMetaData(br, 0, 0)
+		//	if err != nil {
+		//		log.Fatal(err)
+		//	}
+		//
+		//	for i, v := range sr2.FIA {
+		//		switch v.Tag {
+		//		case BlackLevel2:
+		//			black := *sr2.FIAvals[i].short
+		//			copy(rw.blackLevel[:], black)
+		//		case WB_RGGBLevels:
+		//			balance := *sr2.FIAvals[i].sshort
+		//			copy(rw.WhiteBalance[:], balance)
+		//		}
+		//	}
+		//}
 	}
 
+	log.Printf("%+v\n", rw)
 	return rw, nil
 }
 
@@ -342,8 +342,6 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	whiteBalanceRGGB[1] = float64(rw.WhiteBalance[1]) / float64(maxBalance)
 	whiteBalanceRGGB[2] = float64(rw.WhiteBalance[2]) / float64(maxBalance)
 	whiteBalanceRGGB[3] = float64(rw.WhiteBalance[3]) / float64(maxBalance)
-
-	log.Println(whiteBalanceRGGB)
 
 	for y := 0; y < img.Rect.Max.Y; y++ {
 		for x := 0; x < img.Rect.Max.X; x++ {
