@@ -61,6 +61,16 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		gtkStatusBar = b
 	}
 
+	obj, err = builder.GetObject("mainMenuPopover")
+	if err != nil {
+		panic(err)
+	}
+
+	var gtkMenuPopover *gtk.Popover
+	if b, ok := obj.(*gtk.Popover); ok {
+		gtkMenuPopover = b
+	}
+
 	//SETTING UP IMAGE BUFFER
 	pbuf, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, img.Bounds().Dx(), img.Bounds().Dy())
 	if err != nil {
@@ -117,8 +127,23 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 
 	tbuf.SetText(details)
 
-	gtkStatusBar.Push(0, "We were statusbars and stuff")
+	gtkStatusBar.Push(0, name)
 
+	box,err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL,8)
+	if err != nil {
+		panic(err)
+	}
+
+	gtkMenuPopover.Add(box)
+
+	button,err := gtk.ButtonNewWithLabel("Henlo")
+	if err != nil {
+		panic(err)
+	}
+
+	box.Add(button)
+
+	box.ShowAll()
 	gtkimg.Show()
 	gtkwindow.Show()
 

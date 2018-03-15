@@ -203,7 +203,7 @@ func process(cur uint32, black uint32, whiteBalance float64) uint32 {
 	}
 
 	balanced := float64(cur) * whiteBalance
-	return uint32(gamma(balanced) * gammaspace)
+	return uint32(gamma(balanced))
 }
 
 func readCRAW(buf []byte, rw rawDetails) *RGB14 {

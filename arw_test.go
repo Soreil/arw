@@ -71,11 +71,16 @@ func TestViewer(t *testing.T) {
 	buf := make([]byte, rw.length)
 	sample.ReadAt(buf, int64(rw.offset))
 
-	if rw.rawType != raw14 {
-		t.Error("Not yet implemented type:", rw.rawType)
-	}
+	var rendered16bit *RGB14
 
-	rendered16bit := readraw14(buf, rw)
+	switch rw.rawType {
+	case raw14:
+		rendered16bit = readraw14(buf, rw)
+	case craw:
+		rendered16bit = readCRAW(buf,rw)
+	default:
+		t.Error("Unhanded RAW type:",rw.rawType)
+	}
 
 	asRGBA := image.NewRGBA(rendered16bit.Rect)
 	for y := asRGBA.Rect.Min.Y; y < asRGBA.Rect.Max.Y; y++ {
@@ -121,7 +126,7 @@ func TestProcessedPNG(t *testing.T) {
 }
 
 func TestMetadata(t *testing.T) {
-	samplename := samples[raw14][0]
+	samplename := samples[raw14][1]
 	testARW, err := os.Open(samplename + ".ARW")
 	if err != nil {
 		t.Error(err)
