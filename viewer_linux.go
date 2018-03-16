@@ -31,6 +31,16 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		gtkimg = b
 	}
 
+	obj, err = builder.GetObject("scale")
+	if err != nil {
+		panic(err)
+	}
+
+	var gtkZoom *gtk.ScaleButton
+	if b, ok := obj.(*gtk.ScaleButton); ok {
+		gtkZoom = b
+	}
+
 	obj, err = builder.GetObject("mainWindow")
 	if err != nil {
 		panic(err)
@@ -51,14 +61,14 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		gtkTextView = b
 	}
 
-	obj, err = builder.GetObject("mainStatusBar")
+	obj, err = builder.GetObject("filename")
 	if err != nil {
 		panic(err)
 	}
 
-	var gtkStatusBar *gtk.Statusbar
-	if b, ok := obj.(*gtk.Statusbar); ok {
-		gtkStatusBar = b
+	var gtkFilename *gtk.Label
+	if b, ok := obj.(*gtk.Label); ok {
+		gtkFilename = b
 	}
 
 	obj, err = builder.GetObject("mainMenuPopover")
@@ -71,36 +81,77 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		gtkMenuPopover = b
 	}
 
-	//SETTING UP IMAGE BUFFER
-	pbuf, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, img.Bounds().Dx(), img.Bounds().Dy())
+	obj, err = builder.GetObject("aperture")
 	if err != nil {
 		panic(err)
 	}
 
-	buf := pbuf.GetPixels()
+	var gtkAperture *gtk.Label
+	if b, ok := obj.(*gtk.Label); ok {
+		gtkAperture = b
+	}
+	obj, err = builder.GetObject("shutter")
+	if err != nil {
+		panic(err)
+	}
+
+	var gtkShutter *gtk.Label
+	if b, ok := obj.(*gtk.Label); ok {
+		gtkShutter = b
+	}
+	obj, err = builder.GetObject("iso")
+	if err != nil {
+		panic(err)
+	}
+
+	var gtkISO *gtk.Label
+	if b, ok := obj.(*gtk.Label); ok {
+		gtkISO = b
+	}
+
+	//SETTING UP IMAGE BUFFER
+	backingBuffer, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, img.Bounds().Dx(), img.Bounds().Dy())
+	if err != nil {
+		panic(err)
+	}
+
+	buf := backingBuffer.GetPixels()
 	copy(buf, img.Pix)
 
-	pbuf, err = pbuf.RotateSimple(0)
+	backingBuffer, err = backingBuffer.RotateSimple(0)
 	if err != nil {
 		panic(err)
 	}
 
-	pbuf, err = pbuf.ScaleSimple(pbuf.GetWidth()/6, pbuf.GetHeight()/6, gdk.INTERP_BILINEAR)
+	frontbuffer,err := gdk.PixbufNew(gdk.COLORSPACE_RGB,true,8,backingBuffer.GetWidth(),backingBuffer.GetHeight())
+
+	frontbuffer, err = backingBuffer.ScaleSimple(1500, 1000, gdk.INTERP_BILINEAR)
 	if err != nil {
 		panic(err)
 	}
 	//SET UP IMAGE BUFFER
 
-	gtkimg.SetFromPixbuf(pbuf)
+	gtkimg.SetFromPixbuf(frontbuffer)
 	if err != nil {
 		panic(err)
 	}
+
+	gtkZoom.Connect("value-changed", func(sb *gtk.ScaleButton, val float64){
+		if val >= 100 {
+			return
+		}
+		frontbuffer,err = backingBuffer.ScaleSimple(int(1500.0*(100.0-val)/100.0),int(1000.0*(100.0-val)/100.0),gdk.INTERP_BILINEAR)
+		if err != nil {
+			panic(err)
+		}
+
+		gtkimg.SetFromPixbuf(frontbuffer)
+	})
 
 	gtkwindow.Connect("delete-event", func() {
 		gtk.MainQuit()
 	})
 
-	gtkwindow.SetTitle(name)
 
 	tbuf, err := gtkTextView.GetBuffer()
 	if err != nil {
@@ -109,26 +160,15 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 
 	details := fmt.Sprintf("%+v", raw)
 
-	var lastpos int
-	for range details {
-		pos := strings.IndexRune(details[lastpos:], ':')
-		if pos == -1 {
-			break
-		}
-		lastpos += pos
-		toReplace := strings.LastIndex(details[:lastpos], " ")
-		if toReplace == -1 {
-			lastpos++
-			continue
-		} else {
-			details = details[:toReplace] + "\n" + details[toReplace+1:]
-		}
-	}
-
 	tbuf.SetText(details)
 
-	gtkStatusBar.Push(0, name)
+	gtkFilename.SetText(name)
 
+	gtkAperture.SetText(fmt.Sprint(raw.bitDepth))
+	gtkShutter.SetText(fmt.Sprint(raw.height))
+	gtkISO.SetText(fmt.Sprint(raw.length))
+
+	//Set up menu, GLADE can't do this yet so we do it by hand.
 	box,err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL,8)
 	if err != nil {
 		panic(err)
