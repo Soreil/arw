@@ -7,10 +7,10 @@ import (
 	"image"
 	"log"
 	"os"
-	"strings"
+	"time"
 )
 
-func display(img *image.RGBA, name string, raw rawDetails) {
+func display(img *image.RGBA, fileName, lensName string, focalLength float32, aperture float32, iso int, shutter time.Duration) {
 	gtk.Init(nil)
 
 	builder, err := gtk.BuilderNew()
@@ -29,6 +29,15 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 	var gtkimg *gtk.Image
 	if b, ok := obj.(*gtk.Image); ok {
 		gtkimg = b
+	}
+
+	obj, err = builder.GetObject("view")
+	if err != nil {
+		panic(err)
+	}
+	var gtkView *gtk.ScrolledWindow
+	if b, ok := obj.(*gtk.ScrolledWindow); ok {
+		gtkView = b
 	}
 
 	obj, err = builder.GetObject("scale")
@@ -69,6 +78,16 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 	var gtkFilename *gtk.Label
 	if b, ok := obj.(*gtk.Label); ok {
 		gtkFilename = b
+	}
+
+	obj, err = builder.GetObject("lensname")
+	if err != nil {
+		panic(err)
+	}
+
+	var gtkLens *gtk.Label
+	if b, ok := obj.(*gtk.Label); ok {
+		gtkLens = b
 	}
 
 	obj, err = builder.GetObject("mainMenuPopover")
@@ -123,9 +142,11 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		panic(err)
 	}
 
-	frontbuffer,err := gdk.PixbufNew(gdk.COLORSPACE_RGB,true,8,backingBuffer.GetWidth(),backingBuffer.GetHeight())
+	frontbuffer, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, backingBuffer.GetWidth(), backingBuffer.GetHeight())
 
-	frontbuffer, err = backingBuffer.ScaleSimple(1500, 1000, gdk.INTERP_BILINEAR)
+	width, _ := gtkView.GetPreferredWidth()
+	height, _ := gtkView.GetPreferredHeight()
+	frontbuffer, err = backingBuffer.ScaleSimple(width, height, gdk.INTERP_BILINEAR)
 	if err != nil {
 		panic(err)
 	}
@@ -136,11 +157,11 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		panic(err)
 	}
 
-	gtkZoom.Connect("value-changed", func(sb *gtk.ScaleButton, val float64){
+	gtkZoom.Connect("value-changed", func(sb *gtk.ScaleButton, val float64) {
 		if val >= 100 {
 			return
 		}
-		frontbuffer,err = backingBuffer.ScaleSimple(int(1500.0*(100.0-val)/100.0),int(1000.0*(100.0-val)/100.0),gdk.INTERP_BILINEAR)
+		frontbuffer, err = backingBuffer.ScaleSimple(int(1500.0*(100.0-val)/100.0), int(1000.0*(100.0-val)/100.0), gdk.INTERP_BILINEAR)
 		if err != nil {
 			panic(err)
 		}
@@ -152,31 +173,28 @@ func display(img *image.RGBA, name string, raw rawDetails) {
 		gtk.MainQuit()
 	})
 
-
 	tbuf, err := gtkTextView.GetBuffer()
 	if err != nil {
 		panic(err)
 	}
 
-	details := fmt.Sprintf("%+v", raw)
+	_ = tbuf
 
-	tbuf.SetText(details)
-
-	gtkFilename.SetText(name)
-
-	gtkAperture.SetText(fmt.Sprint(raw.bitDepth))
-	gtkShutter.SetText(fmt.Sprint(raw.height))
-	gtkISO.SetText(fmt.Sprint(raw.length))
+	gtkFilename.SetText(fileName)
+	gtkAperture.SetText(fmt.Sprintf("f/%v", aperture))
+	gtkShutter.SetText(fmt.Sprintf("%v", shutter))
+	gtkISO.SetText(fmt.Sprintf("%d ISO", iso))
+	gtkLens.SetText(fmt.Sprintf("%v @ %vmm", lensName[:len(lensName)-1], int(focalLength)))
 
 	//Set up menu, GLADE can't do this yet so we do it by hand.
-	box,err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL,8)
+	box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
 	if err != nil {
 		panic(err)
 	}
 
 	gtkMenuPopover.Add(box)
 
-	button,err := gtk.ButtonNewWithLabel("Henlo")
+	button, err := gtk.ButtonNewWithLabel("Henlo")
 	if err != nil {
 		panic(err)
 	}

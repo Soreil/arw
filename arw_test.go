@@ -57,7 +57,7 @@ func TestDecodeA7R3(t *testing.T) {
 }
 
 func TestViewer(t *testing.T) {
-	sampleName := samples[raw14][1]
+	sampleName := samples[raw14][0]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -77,9 +77,9 @@ func TestViewer(t *testing.T) {
 	case raw14:
 		rendered16bit = readraw14(buf, rw)
 	case craw:
-		rendered16bit = readCRAW(buf,rw)
+		rendered16bit = readCRAW(buf, rw)
 	default:
-		t.Error("Unhanded RAW type:",rw.rawType)
+		t.Error("Unhanded RAW type:", rw.rawType)
 	}
 
 	asRGBA := image.NewRGBA(rendered16bit.Rect)
@@ -89,7 +89,7 @@ func TestViewer(t *testing.T) {
 		}
 	}
 
-	display(asRGBA, sampleName, rw)
+	display(asRGBA, sampleName, rw.lensModel, rw.focalLength, rw.aperture, int(rw.iso), time.Duration(rw.shutter*float32(time.Second)))
 }
 
 func TestProcessedPNG(t *testing.T) {

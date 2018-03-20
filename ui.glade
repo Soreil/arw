@@ -39,6 +39,8 @@
                     <property name="shadow_type">out</property>
                     <property name="min_content_width">900</property>
                     <property name="min_content_height">600</property>
+		    <property name="propagate-natural-height">True</property>
+		    <property name="propagate-natural-width">True</property>
 		    <child>
                       <object class="GtkImage" id="mainImage">
                     	<property name="visible">True</property>
@@ -250,6 +252,18 @@ zoom-out-symbolic</property>
                             <property name="expand">False</property>
                             <property name="fill">True</property>
                             <property name="position">1</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="lensname">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="label" translatable="yes">lensname</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">2</property>
                           </packing>
                         </child>
                       </object>

@@ -24,6 +24,11 @@ type rawDetails struct {
 	crop          image.Rectangle
 	cfaPattern    [4]uint8 //TODO(sjon): This might not always be 4 bytes is my suspicion. We currently take from the offset
 	cfaPatternDim [2]uint16
+	aperture      float32
+	shutter       float32
+	iso           uint16
+	focalLength   float32
+	lensModel     string
 }
 
 func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
@@ -75,10 +80,32 @@ func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
 					rw.cfaPattern[2] = uint8((v.Offset & 0x00ff0000) >> 16)
 					rw.cfaPattern[3] = uint8((v.Offset & 0xff000000) >> 24)
 				case CFARepeatPatternDim:
-					rw.cfaPatternDim[0] = uint16((v.Offset * 0x0000ffff) >> 0)
-					rw.cfaPatternDim[1] = uint16((v.Offset * 0xffff0000) >> 16)
+					rw.cfaPatternDim[0] = uint16((v.Offset & 0x0000ffff) >> 0)
+					rw.cfaPatternDim[1] = uint16((v.Offset & 0xffff0000) >> 16)
 				}
 			}
+		}
+
+		if fia.Tag == ExifTag {
+			exif, err := ExtractMetaData(rs, int64(fia.Offset), 0)
+			if err != nil {
+				return rw, err
+			}
+			for i, v := range exif.FIA {
+				switch v.Tag {
+				case ExposureTime:
+					rw.shutter = (*exif.FIAvals[i].rat)[0]
+				case FNumber:
+					rw.aperture = (*exif.FIAvals[i].rat)[0]
+				case ISOSpeedRatings:
+					rw.iso = uint16((v.Offset & 0x0000ffff) >> 0)
+				case FocalLength:
+					rw.focalLength = (*exif.FIAvals[i].rat)[0]
+				case LensModel:
+					rw.lensModel = string(*exif.FIAvals[i].ascii)
+				}
+			}
+
 		}
 
 		//if fia.Tag == DNGPrivateData {
@@ -194,8 +221,7 @@ func gammacorrect(curve [4]uint32) {
 }
 
 func process(cur uint32, black uint32, whiteBalance float64) uint32 {
-	const gammaspace = 1.596472423
-
+	//const gammaspace = 1.596472423
 	if cur <= black {
 		return cur
 	} else {

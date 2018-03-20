@@ -410,7 +410,7 @@ func ParseHeader(r io.ReadSeeker) (TIFFHeader, error) {
 	var header TIFFHeader
 	binary.Read(r, b, &header)
 	if header.FortyTwo != 42 {
-		return header, errors.New("found an endianness marker but no fixed 42, offset might be unrealiable")
+		return header, errors.New("found an endianness marker but no fixed 42, offset might be unreliable")
 	}
 	return header, nil
 }
