@@ -52,7 +52,7 @@ func TestDecodeA7R3(t *testing.T) {
 
 	start := time.Now()
 	t.Log(rw.gammaCurve)
-	readraw14(buf, rw)
+	readRaw14(buf, rw)
 	t.Log("processing duration:", time.Now().Sub(start))
 }
 
@@ -75,7 +75,7 @@ func TestViewer(t *testing.T) {
 
 	switch rw.rawType {
 	case raw14:
-		rendered16bit = readraw14(buf, rw)
+		rendered16bit = readRaw14(buf, rw)
 	case craw:
 		rendered16bit = readCRAW(buf, rw)
 	default:
@@ -93,7 +93,7 @@ func TestViewer(t *testing.T) {
 }
 
 func TestProcessedPNG(t *testing.T) {
-	sampleName := samples[raw14][1]
+	sampleName := samples[raw14][0]
 	sample, err := os.Open(sampleName + ".ARW")
 	if err != nil {
 		t.Error(err)
@@ -109,7 +109,7 @@ func TestProcessedPNG(t *testing.T) {
 
 	var rendered16bit *RGB14
 	if rw.rawType == raw14 {
-		rendered16bit = readraw14(buf, rw)
+		rendered16bit = readRaw14(buf, rw)
 	}
 	if rw.rawType == craw {
 		rendered16bit = readCRAW(buf, rw)

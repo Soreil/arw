@@ -3,165 +3,13 @@ package arw
 import (
 	"github.com/gonum/matrix/mat64"
 	"image"
-	"image/color"
-	"io"
 	"log"
 	"reflect"
 	"unsafe"
 )
 
-type rawDetails struct {
-	width         uint16
-	height        uint16
-	bitDepth      uint16
-	rawType       sonyRawFile
-	offset        uint32
-	stride        uint32
-	length        uint32
-	blackLevel    [4]uint16
-	WhiteBalance  [4]int16
-	gammaCurve    [5]uint16
-	crop          image.Rectangle
-	cfaPattern    [4]uint8 //TODO(sjon): This might not always be 4 bytes is my suspicion. We currently take from the offset
-	cfaPatternDim [2]uint16
-	aperture      float32
-	shutter       float32
-	iso           uint16
-	focalLength   float32
-	lensModel     string
-}
-
-func extractDetails(rs io.ReadSeeker) (rawDetails, error) {
-	var rw rawDetails
-
-	header, err := ParseHeader(rs)
-	meta, err := ExtractMetaData(rs, int64(header.Offset), 0)
-	if err != nil {
-		return rw, err
-	}
-
-	for _, fia := range meta.FIA {
-		if fia.Tag == SubIFDs {
-			rawIFD, err := ExtractMetaData(rs, int64(fia.Offset), 0)
-			if err != nil {
-				return rw, err
-			}
-
-			for i, v := range rawIFD.FIA {
-				switch v.Tag {
-				case ImageWidth:
-					rw.width = uint16(v.Offset)
-				case ImageHeight:
-					rw.height = uint16(v.Offset)
-				case BitsPerSample:
-					rw.bitDepth = uint16(v.Offset)
-				case SonyRawFileType:
-					rw.rawType = sonyRawFile(v.Offset)
-				case StripOffsets:
-					rw.offset = v.Offset
-				case RowsPerStrip:
-					rw.stride = v.Offset //TODO(sjon): Uncompressed RAW files are 2 bytes per pixel whereas CRAW is 1 byte per pixel, this shouldn't be set here! current behaviour is for CRAW, add a divide by 2 for RAW
-				case StripByteCounts:
-					rw.length = v.Offset
-				case SonyCurve:
-					curve := *rawIFD.FIAvals[i].short
-					copy(rw.gammaCurve[:4], curve)
-					rw.gammaCurve[4] = 0x3fff
-				case BlackLevel2:
-					black := *rawIFD.FIAvals[i].short
-					copy(rw.blackLevel[:], black)
-				case WB_RGGBLevels:
-					balance := *rawIFD.FIAvals[i].sshort
-					copy(rw.WhiteBalance[:], balance)
-				case DefaultCropSize:
-				case CFAPattern2:
-					rw.cfaPattern[0] = uint8((v.Offset & 0x000000ff) >> 0)
-					rw.cfaPattern[1] = uint8((v.Offset & 0x0000ff00) >> 8)
-					rw.cfaPattern[2] = uint8((v.Offset & 0x00ff0000) >> 16)
-					rw.cfaPattern[3] = uint8((v.Offset & 0xff000000) >> 24)
-				case CFARepeatPatternDim:
-					rw.cfaPatternDim[0] = uint16((v.Offset & 0x0000ffff) >> 0)
-					rw.cfaPatternDim[1] = uint16((v.Offset & 0xffff0000) >> 16)
-				}
-			}
-		}
-
-		if fia.Tag == ExifTag {
-			exif, err := ExtractMetaData(rs, int64(fia.Offset), 0)
-			if err != nil {
-				return rw, err
-			}
-			for i, v := range exif.FIA {
-				switch v.Tag {
-				case ExposureTime:
-					rw.shutter = (*exif.FIAvals[i].rat)[0]
-				case FNumber:
-					rw.aperture = (*exif.FIAvals[i].rat)[0]
-				case ISOSpeedRatings:
-					rw.iso = uint16((v.Offset & 0x0000ffff) >> 0)
-				case FocalLength:
-					rw.focalLength = (*exif.FIAvals[i].rat)[0]
-				case LensModel:
-					rw.lensModel = string(*exif.FIAvals[i].ascii)
-				}
-			}
-
-		}
-
-		//if fia.Tag == DNGPrivateData {
-		//	dng, err := ExtractMetaData(rs, int64(fia.Offset), 0)
-		//	if err != nil {
-		//		return rw, err
-		//	}
-		//
-		//	var sr2offset uint32
-		//	var sr2length uint32
-		//	var sr2key [4]byte
-		//
-		//	for i := range dng.FIA {
-		//		if dng.FIA[i].Tag == SR2SubIFDOffset {
-		//			offset := dng.FIA[i].Offset
-		//			sr2offset = offset
-		//		}
-		//		if dng.FIA[i].Tag == SR2SubIFDLength {
-		//			sr2length = dng.FIA[i].Offset
-		//		}
-		//		if dng.FIA[i].Tag == SR2SubIFDKey {
-		//			key := dng.FIA[i].Offset*0x0edd + 1
-		//			sr2key[3] = byte((key >> 24) & 0xff)
-		//			sr2key[2] = byte((key >> 16) & 0xff)
-		//			sr2key[1] = byte((key >> 8) & 0xff)
-		//			sr2key[0] = byte((key) & 0xff)
-		//		}
-		//	}
-		//
-		//	buf := DecryptSR2(rs, sr2offset, sr2length)
-		//	br := bytes.NewReader(buf)
-		//
-		//	sr2, err := ExtractMetaData(br, 0, 0)
-		//	if err != nil {
-		//		log.Fatal(err)
-		//	}
-		//
-		//	for i, v := range sr2.FIA {
-		//		switch v.Tag {
-		//		case BlackLevel2:
-		//			black := *sr2.FIAvals[i].short
-		//			copy(rw.blackLevel[:], black)
-		//		case WB_RGGBLevels:
-		//			balance := *sr2.FIAvals[i].sshort
-		//			copy(rw.WhiteBalance[:], balance)
-		//		}
-		//	}
-		//}
-	}
-
-	log.Printf("%+v\n", rw)
-	return rw, nil
-}
-
-//Helper function for gammacorrect
-func vandermonde(a []float64, degree int) *mat64.Dense {
+//Helper function for createToneCurve which generates a Van der Monde matrix.
+func vanDerMonde(a []float64, degree int) *mat64.Dense {
 	x := mat64.NewDense(len(a), degree+1, nil)
 	for i := range a {
 		for j, p := 0, 1.; j <= degree; j, p = j+1, p*a[i] {
@@ -171,37 +19,45 @@ func vandermonde(a []float64, degree int) *mat64.Dense {
 	return x
 }
 
-//This function is created by gammacorrect
-var xfactors [6]float64
+//xFactors are coefficients which are used to map incoming data to the Sony provided tone curve.
+var xFactors [6]float64
+var sRGBFactors [2]float64
 
-func gamma(x float64) float64 {
-	if x > 0x3fff {
-		//panic("This shouldn't be happening!")
-		return 0x3fff //TODO(sjon): Should it be concidered a bug if we receive blown out values here?
+func sRGB(x float64) float64 {
+	x1 := sRGBFactors[1] * x
+	x0 := sRGBFactors[0]
+	val := x1 + x0
+	return val
+}
+
+func gamma(xINT float64) float64 {
+	if xINT > 0x3fff {
+		panic("This shouldn't be happening!")
+		return 0x3fff //TODO(sjon): Should it be considered a bug if we receive blown out values here?
 	}
 	/*TODO(sjon): What should the correct value be here? Lower values seem to work for most inputs
 	the building sample works ok with 0x200 but the baloon sample clips in multiple places with values lower than 0xcc
 	*/
-	x /= 0xCCC //We need to keep x in between 0 and 5, this maps to 0x0 to 0x3fff
+	x := xINT / 0x0ccc //We need to keep x in between 0 and 5, this maps to 0x0 to 0x3fff
 
-	x5 := xfactors[5] * x * x * x * x * x
-	x4 := xfactors[4] * x * x * x * x
-	x3 := xfactors[3] * x * x * x
-	x2 := xfactors[2] * x * x
-	x1 := xfactors[1] * x
-	x0 := xfactors[0] * 1
+	x5 := xFactors[5] * x * x * x * x * x
+	x4 := xFactors[4] * x * x * x * x
+	x3 := xFactors[3] * x * x * x
+	x2 := xFactors[2] * x * x
+	x1 := xFactors[1] * x
+	x0 := xFactors[0] * 1
 	val := x5 + x4 + x3 + x2 + x1 + x0 //The negative signs are already in the numbers
 	return val
 }
 
 //The gamma curve points are in a 14 bit space space where we draw a curve that goes through the points.
-func gammacorrect(curve [4]uint32) {
+func createToneCurve(curve [4]uint32) {
 	x := []float64{0, 1, 2, 3, 4, 5} // It would be nice if we could make this [0,0x3fff] but that seems to be impossible
 
 	y := []float64{0, float64(curve[0]), float64(curve[1]), float64(curve[2]), float64(curve[3]), 0x3fff}
 	const degree = 5
 
-	a := vandermonde(x, degree)
+	a := vanDerMonde(x, degree)
 	b := mat64.NewDense(len(y), 1, y)
 	c := mat64.NewDense(degree+1, 1, nil)
 
@@ -212,24 +68,43 @@ func gammacorrect(curve [4]uint32) {
 		log.Println(err)
 	}
 
-	xfactors[5] = c.At(5, 0)
-	xfactors[4] = c.At(4, 0)
-	xfactors[3] = c.At(3, 0)
-	xfactors[2] = c.At(2, 0)
-	xfactors[1] = c.At(1, 0)
-	xfactors[0] = c.At(0, 0)
+	xFactors[5] = c.At(5, 0)
+	xFactors[4] = c.At(4, 0)
+	xFactors[3] = c.At(3, 0)
+	xFactors[2] = c.At(2, 0)
+	xFactors[1] = c.At(1, 0)
+	xFactors[0] = c.At(0, 0)
+}
+
+func createSRGBCurve() {
+	x := []float64{0, 0.25, 1}
+	y := []float64{0, 0x2fff, 0x3fff}
+	const degree = 1
+
+	a := vanDerMonde(x, degree)
+	b := mat64.NewDense(len(y), 1, y)
+	c := mat64.NewDense(degree+1, 1, nil)
+
+	qr := new(mat64.QR)
+	qr.Factorize(a)
+
+	if err := c.SolveQR(qr, false, b); err != nil {
+		log.Println(err)
+	}
+
+	sRGBFactors[1] = c.At(1, 0)
+	sRGBFactors[0] = c.At(0, 0)
 }
 
 func process(cur uint32, black uint32, whiteBalance float64) uint32 {
-	//const gammaspace = 1.596472423
 	if cur <= black {
-		return cur
+		return 0
 	} else {
 		cur -= black
 	}
 
 	balanced := float64(cur) * whiteBalance
-	return uint32(gamma(balanced))
+	return uint32(sRGB(gamma(balanced) / 0x3fff))
 }
 
 func readCRAW(buf []byte, rw rawDetails) *RGB14 {
@@ -240,7 +115,7 @@ func readCRAW(buf []byte, rw rawDetails) *RGB14 {
 	gamma[1] = uint32(rw.gammaCurve[1])
 	gamma[2] = uint32(rw.gammaCurve[2])
 	gamma[3] = uint32(rw.gammaCurve[3])
-	gammacorrect(gamma)
+	createToneCurve(gamma)
 
 	var whiteBalanceRGGB [4]float64
 	var maxBalance int16
@@ -334,21 +209,24 @@ func readCRAW(buf []byte, rw rawDetails) *RGB14 {
 	return img
 }
 
-func readraw14(buf []byte, rw rawDetails) *RGB14 {
-	sliceheader := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
-	sliceheader.Len /= 2
-	sliceheader.Cap /= 2
-	data := *(*[]uint16)(unsafe.Pointer(&sliceheader))
+func readRaw14(buf []byte, rw rawDetails) *RGB14 {
+	//Since we are working with 14 it bytes we choose to simply change the slice's header
+	sliceHeader := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	sliceHeader.Len /= 2
+	sliceHeader.Cap /= 2
+	data := *(*[]uint16)(unsafe.Pointer(&sliceHeader))
 
 	img := NewRGB14(image.Rect(0, 0, int(rw.width), int(rw.height)))
 
 	var cur uint32
+
 	var gamma [4]uint32
 	gamma[0] = uint32(rw.gammaCurve[0])
 	gamma[1] = uint32(rw.gammaCurve[1])
 	gamma[2] = uint32(rw.gammaCurve[2])
 	gamma[3] = uint32(rw.gammaCurve[3])
-	gammacorrect(gamma)
+	createToneCurve(gamma)
+	createSRGBCurve()
 
 	var whiteBalanceRGGB [4]float64
 	var maxBalance int16
@@ -414,52 +292,4 @@ func readraw14(buf []byte, rw rawDetails) *RGB14 {
 	}
 
 	return img
-}
-
-// NewRGBA returns a new RGBA image with the given bounds.
-func NewRGB14(r image.Rectangle) *RGB14 {
-	w, h := r.Dx(), r.Dy()
-	buf := make([]pixel16, w*h)
-	return &RGB14{buf, w, r}
-}
-
-// RGBA64 is an in-memory image whose At method returns pixel16 values.
-type RGB14 struct {
-	Pix []pixel16
-	// Stride is the Pix stride between vertically adjacent pixels.
-	Stride int
-	// Rect is the image's bounds.
-	Rect image.Rectangle
-}
-
-func (r *RGB14) at(x, y int) pixel16 {
-	return r.Pix[(y*r.Stride)+x]
-}
-
-func (r *RGB14) At(x, y int) color.Color {
-	return r.at(x, y)
-}
-
-func (r *RGB14) Bounds() image.Rectangle {
-	return r.Rect.Bounds()
-}
-
-func (r *RGB14) ColorModel() color.Model {
-	return color.RGBA64Model
-}
-
-func (c pixel16) RGBA() (r, g, b, a uint32) {
-	return uint32(c.R << 2), uint32(c.G << 2), uint32(c.B << 2), 0xffff
-	//return uint32(c.R), uint32(c.G), uint32(c.B), 0xffff
-}
-
-func (r *RGB14) set(x, y int, pixel pixel16) {
-	r.Pix[y*r.Stride+x] = pixel
-}
-
-type pixel16 struct {
-	R uint16
-	G uint16
-	B uint16
-	_ uint16
 }

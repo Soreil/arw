@@ -137,15 +137,20 @@ func display(img *image.RGBA, fileName, lensName string, focalLength float32, ap
 	buf := backingBuffer.GetPixels()
 	copy(buf, img.Pix)
 
-	backingBuffer, err = backingBuffer.RotateSimple(0)
+	width, _ := gtkView.GetPreferredWidth()
+	height, _ := gtkView.GetPreferredHeight()
+	rotation := gdk.PixbufRotation(gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE)
+	if rotation == gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE {
+		width, height = height, width
+	}
+
+	backingBuffer, err = backingBuffer.RotateSimple(rotation)
 	if err != nil {
 		panic(err)
 	}
 
 	frontbuffer, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, backingBuffer.GetWidth(), backingBuffer.GetHeight())
 
-	width, _ := gtkView.GetPreferredWidth()
-	height, _ := gtkView.GetPreferredHeight()
 	frontbuffer, err = backingBuffer.ScaleSimple(width, height, gdk.INTERP_BILINEAR)
 	if err != nil {
 		panic(err)
@@ -161,7 +166,7 @@ func display(img *image.RGBA, fileName, lensName string, focalLength float32, ap
 		if val >= 100 {
 			return
 		}
-		frontbuffer, err = backingBuffer.ScaleSimple(int(1500.0*(100.0-val)/100.0), int(1000.0*(100.0-val)/100.0), gdk.INTERP_BILINEAR)
+		frontbuffer, err = backingBuffer.ScaleSimple(int(float64(width)*(100.0-val)/100.0), int(float64(height)*(100.0-val)/100.0), gdk.INTERP_BILINEAR)
 		if err != nil {
 			panic(err)
 		}
