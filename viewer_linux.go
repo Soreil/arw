@@ -178,6 +178,8 @@ func display(img *image.RGBA, fileName, lensName string, focalLength float32, ap
 		gtk.MainQuit()
 	})
 
+	gtkTextView.SetVisible(false)
+
 	tbuf, err := gtkTextView.GetBuffer()
 	if err != nil {
 		panic(err)
